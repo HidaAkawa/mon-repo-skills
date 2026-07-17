@@ -1,0 +1,4 @@
+interface:
+  display_name: "Revue indépendante Claude"
+  short_description: "Piloter des revues Claude indépendantes et traçables"
+  default_prompt: "Utilise $claude-independent-review pour configurer ou lancer une revue indépendante de ce projet avec Claude."
