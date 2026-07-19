@@ -392,6 +392,25 @@ def render_agents(existing: str | None, language: str) -> str:
     return existing + separator + block + "\n"
 
 
+def render_agents_without_pointer(existing: str | None) -> str | None:
+    """Remove only the block managed by this skill, preserving all other content."""
+    if existing is None:
+        return None
+    has_start = AGENTS_START in existing
+    has_end = AGENTS_END in existing
+    if has_start != has_end:
+        raise ReviewError("Bloc claude-independent-review incomplet dans AGENTS.md ; arbitrage manuel requis")
+    if not has_start:
+        return existing
+    if existing.count(AGENTS_START) != 1 or existing.count(AGENTS_END) != 1:
+        raise ReviewError("Plusieurs blocs claude-independent-review dans AGENTS.md ; arbitrage manuel requis")
+    start = existing.index(AGENTS_START)
+    end = existing.index(AGENTS_END, start) + len(AGENTS_END)
+    if end < len(existing) and existing[end] == "\n":
+        end += 1
+    return existing[:start] + existing[end:]
+
+
 def _atomic_write(path: Path, content: bytes, *, replace: bool) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and not replace:
@@ -456,6 +475,46 @@ def install_policy(project_root: Path, proposal_path: Path, replace: bool) -> No
             if codex_directory.exists() and not any(codex_directory.iterdir()):
                 codex_directory.rmdir()
         raise
+
+
+def disable_policy(project_root: Path) -> dict[str, Any]:
+    """Remove the project integration while leaving every audit artifact untouched."""
+    config_path = project_root / CONFIG_RELATIVE
+    agents_path = project_root / "AGENTS.md"
+    _ensure_output_within(project_root, config_path, "Politique")
+    _ensure_output_within(project_root, agents_path, "Pointeur AGENTS.md")
+
+    old_config = config_path.read_bytes() if config_path.exists() else None
+    old_agents = agents_path.read_bytes() if agents_path.exists() else None
+    try:
+        existing_agents = old_agents.decode("utf-8") if old_agents is not None else None
+    except UnicodeError as exc:
+        raise ReviewError("AGENTS.md doit être encodé en UTF-8 pour retirer le pointeur géré") from exc
+    rendered_agents = render_agents_without_pointer(existing_agents)
+    rendered_agents_bytes = rendered_agents.encode("utf-8") if rendered_agents is not None else None
+
+    removed: list[str] = []
+    try:
+        if rendered_agents_bytes is not None and rendered_agents_bytes != old_agents:
+            _atomic_write(agents_path, rendered_agents_bytes, replace=True)
+            removed.append("agents_pointer")
+        if old_config is not None:
+            config_path.unlink()
+            removed.append("policy")
+    except Exception:
+        if old_config is not None:
+            _atomic_write(config_path, old_config, replace=True)
+        if old_agents is None:
+            agents_path.unlink(missing_ok=True)
+        else:
+            _atomic_write(agents_path, old_agents, replace=True)
+        raise
+
+    return {
+        "status": "disabled" if removed else "already_disabled",
+        "removed": removed,
+        "reports_preserved": True,
+    }
 
 
 def _run(command: Sequence[str], cwd: Path, *, check: bool = True, timeout: int = 30) -> subprocess.CompletedProcess[bytes]:
@@ -1399,6 +1458,11 @@ def build_parser() -> argparse.ArgumentParser:
     install_parser.add_argument("--config", required=True)
     install_parser.add_argument("--replace", action="store_true")
 
+    disable_parser = subparsers.add_parser(
+        "disable-policy", help="Désactiver les revues configurées sans supprimer les rapports"
+    )
+    disable_parser.add_argument("--project", required=True)
+
     migrate_parser = subparsers.add_parser("migrate-config", help="Migrer explicitement un ancien brouillon")
     migrate_parser.add_argument("--input", required=True)
     migrate_parser.add_argument("--output", required=True)
@@ -1446,6 +1510,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "config": str(project_root / CONFIG_RELATIVE),
                     "agents": str(project_root / "AGENTS.md"),
                 }
+            elif arguments.command == "disable-policy":
+                project_root = Path(arguments.project).resolve()
+                result = disable_policy(project_root)
+                result.update(
+                    {
+                        "config": str(project_root / CONFIG_RELATIVE),
+                        "agents": str(project_root / "AGENTS.md"),
+                    }
+                )
             elif arguments.command == "migrate-config":
                 migrated = migrate_policy(load_json(Path(arguments.input).resolve()))
                 output_path = Path(arguments.output).resolve()

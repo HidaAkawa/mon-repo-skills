@@ -144,6 +144,24 @@ Recopier ensuite le dossier `skills/claude-independent-review` vers le même emp
 
 Les politiques et rapports créés dans les projets ne résident pas dans ce dépôt de skills : ils restent dans leurs projets respectifs et peuvent y être versionnés pour conserver la trace des décisions.
 
+## Désactivation dans un projet
+
+Pour désactiver les revues automatiques et ponctuelles dans un projet sans perdre l'historique d'audit, demander à Codex :
+
+```text
+Utilise $claude-independent-review pour désactiver les revues indépendantes dans ce projet sans supprimer les rapports.
+```
+
+Codex exécute alors :
+
+```bash
+python3 ~/.codex/skills/claude-independent-review/scripts/claude_review.py disable-policy --project <racine-du-projet>
+```
+
+La commande retire seulement la politique `.codex/claude-review.json` et le bloc géré par le skill dans le `AGENTS.md` racine. Elle conserve intégralement le répertoire de rapports configuré, notamment les rapports Claude, les résolutions, les manifests et les diffs de preuve. Elle peut être relancée sans danger si le projet est déjà désactivé.
+
+Une réactivation ultérieure repasse par la configuration normale du skill ; les audits conservés ne sont ni remplacés ni inclus dans les snapshots de revue.
+
 ## Contenu du skill
 
 ```text

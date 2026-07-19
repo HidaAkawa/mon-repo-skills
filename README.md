@@ -6,7 +6,7 @@ Ce dépôt regroupe des skills personnels pour Codex et, lorsque leur format le 
 
 | Skill | Description | Documentation |
 |---|---|---|
-| `claude-independent-review` | Faire relire du code, de l'architecture, de la sécurité, du design ou du contenu par Claude Code en lecture seule, avec arbitrage final par Codex. | [Consulter le guide](skills/claude-independent-review/README.md) |
+| `claude-independent-review` | Faire relire du code, de l'architecture, de la sécurité, du design ou du contenu par Claude Code en lecture seule, avec arbitrage final par Codex et désactivation sans perte des audits. | [Consulter le guide](skills/claude-independent-review/README.md) |
 
 ## Organisation
 

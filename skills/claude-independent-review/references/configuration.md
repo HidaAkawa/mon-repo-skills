@@ -3,6 +3,7 @@
 ## Table des matières
 
 - [Emplacement et cycle de vie](#emplacement-et-cycle-de-vie)
+- [Désactivation](#désactivation)
 - [Choix du modèle Claude](#choix-du-modèle-claude)
 - [Schéma version 1](#schéma-version-1)
 - [Jalons](#jalons)
@@ -14,6 +15,12 @@
 Conserver la politique dans `.codex/claude-review.json`. La faire valider par `<skill-dir>/scripts/claude_review.py validate-config`. Toute évolution doit être présentée à l'utilisateur avant `install-policy --replace`.
 
 Le runner accepte uniquement `schema_version: 1`. Un numéro futur ou inconnu est refusé sans migration implicite. Le sous-programme `migrate-config` peut convertir explicitement un brouillon version 0 en ajoutant les valeurs désormais obligatoires `max_turns`, `max_files` et `max_bytes`; il écrit toujours un nouveau fichier et ne remplace jamais l'original.
+
+## Désactivation
+
+`disable-policy --project <racine>` retire uniquement `.codex/claude-review.json` et le bloc délimité géré par le skill dans `AGENTS.md`. La commande ne parcourt pas le répertoire `reports.directory` et ne supprime ni rapports, ni résolutions, ni preuves. Elle est idempotente et restaure la politique et `AGENTS.md` si une opération échoue.
+
+Après désactivation, les audits restent des artefacts autonomes du projet. Une réactivation installe une nouvelle politique selon le parcours normal sans écraser ces fichiers.
 
 ## Choix du modèle Claude
 

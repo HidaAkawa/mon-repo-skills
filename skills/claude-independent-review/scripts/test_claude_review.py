@@ -176,6 +176,109 @@ class ConfigurationTests(unittest.TestCase):
             self.assertFalse((root / review.CONFIG_RELATIVE).exists())
             proposal.unlink()
 
+    def test_disables_policy_idempotently_without_touching_audit_artifacts(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            proposal = root.parent / f"{root.name}-proposal.json"
+            write_json(proposal, policy_data())
+            original_agents = "# Existing instructions\n\nKeep this content.\n"
+            (root / "AGENTS.md").write_text(original_agents, encoding="utf-8")
+            review.install_policy(root, proposal, replace=False)
+
+            report = root / "docs/reviews/2026-01-01-lot-ready-claude.md"
+            manifest = root / "docs/reviews/evidence/2026-01-01-lot-ready-claude/manifest.json"
+            resolution = root / "docs/reviews/2026-01-01-lot-ready-resolution.md"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            manifest.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text("immutable report\n", encoding="utf-8")
+            manifest.write_text('{"sha256": "fixture"}\n', encoding="utf-8")
+            resolution.write_text("resolution record\n", encoding="utf-8")
+            audit_before = {
+                path.relative_to(root).as_posix(): path.read_bytes()
+                for path in (report, manifest, resolution)
+            }
+
+            result = review.disable_policy(root)
+
+            self.assertEqual(result["status"], "disabled")
+            self.assertCountEqual(result["removed"], ["agents_pointer", "policy"])
+            self.assertTrue(result["reports_preserved"])
+            self.assertFalse((root / review.CONFIG_RELATIVE).exists())
+            agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertIn("Keep this content.", agents)
+            self.assertNotIn(review.AGENTS_START, agents)
+            self.assertNotIn(review.AGENTS_END, agents)
+            audit_after = {
+                path.relative_to(root).as_posix(): path.read_bytes()
+                for path in (report, manifest, resolution)
+            }
+            self.assertEqual(audit_after, audit_before)
+
+            second = review.disable_policy(root)
+            self.assertEqual(second["status"], "already_disabled")
+            self.assertEqual(second["removed"], [])
+            self.assertEqual(audit_after, audit_before)
+            proposal.unlink()
+
+    def test_disable_refuses_partial_pointer_before_removing_policy(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            config_path = root / review.CONFIG_RELATIVE
+            write_json(config_path, policy_data())
+            original_config = config_path.read_bytes()
+            (root / "AGENTS.md").write_text(review.AGENTS_START + "\n", encoding="utf-8")
+            report = root / "docs/reviews/existing.md"
+            report.parent.mkdir(parents=True)
+            report.write_text("preserve me\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(review.ReviewError, "incomplet"):
+                review.disable_policy(root)
+
+            self.assertEqual(config_path.read_bytes(), original_config)
+            self.assertEqual(report.read_text(encoding="utf-8"), "preserve me\n")
+
+    def test_disable_policy_cli_reports_preservation(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            write_json(root / review.CONFIG_RELATIVE, policy_data())
+            (root / "AGENTS.md").write_text(review.render_agents(None, "fr"), encoding="utf-8")
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                return_code = review.main(["disable-policy", "--project", str(root)])
+
+            self.assertEqual(return_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["status"], "disabled")
+            self.assertTrue(payload["reports_preserved"])
+            self.assertEqual((root / "AGENTS.md").read_text(encoding="utf-8"), "")
+
+    def test_disable_rolls_back_pointer_when_policy_removal_fails(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            proposal = root.parent / f"{root.name}-proposal.json"
+            write_json(proposal, policy_data())
+            (root / "AGENTS.md").write_text("# Existing\n", encoding="utf-8")
+            review.install_policy(root, proposal, replace=False)
+            config_path = root / review.CONFIG_RELATIVE
+            agents_path = root / "AGENTS.md"
+            config_before = config_path.read_bytes()
+            agents_before = agents_path.read_bytes()
+            real_unlink = Path.unlink
+
+            def fail_policy_unlink(path, *args, **kwargs):
+                if path == config_path:
+                    raise OSError("fixture removal failure")
+                return real_unlink(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "unlink", autospec=True, side_effect=fail_policy_unlink):
+                with self.assertRaisesRegex(OSError, "fixture removal failure"):
+                    review.disable_policy(root)
+
+            self.assertEqual(config_path.read_bytes(), config_before)
+            self.assertEqual(agents_path.read_bytes(), agents_before)
+            proposal.unlink()
+
     def test_rejects_duplicate_agents_blocks(self):
         block = review.render_agents(None, "fr")
         with self.assertRaisesRegex(review.ReviewError, "Plusieurs blocs"):

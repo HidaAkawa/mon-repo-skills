@@ -1,6 +1,6 @@
 ---
 name: claude-independent-review
-description: Use Claude Code as a separate, read-only reviewer for code, architecture, security, design, or content, with filtered snapshots, immutable audit reports, Codex adjudication, resolution records, and user-confirmed counter-reviews. Use when the user asks for a Claude or second-model review, when configuring persistent review milestones for a project, or when an AGENTS.md pointer says a configured independent-review milestone has been reached.
+description: Use Claude Code as a separate, read-only reviewer for code, architecture, security, design, or content, with filtered snapshots, immutable audit reports, Codex adjudication, resolution records, user-confirmed counter-reviews, and project-level disabling that preserves prior audits. Use when the user asks for a Claude or second-model review, when configuring or disabling persistent review milestones for a project, or when an AGENTS.md pointer says a configured independent-review milestone has been reached.
 ---
 
 # Revue indépendante Claude
@@ -11,6 +11,7 @@ Résoudre `<skill-dir>` comme le dossier absolu contenant ce `SKILL.md`. Exécut
 
 ## Choisir le parcours
 
+- Si l'utilisateur demande de désactiver le skill dans le projet, suivre **Désactiver dans le projet** avant de considérer l'absence éventuelle de politique.
 - Si `.codex/claude-review.json` n'existe pas, suivre **Initialiser le projet**.
 - Si l'utilisateur demande explicitement une revue, considérer cette revue initiale comme autorisée.
 - Si un jalon configuré est atteint, annoncer mission, périmètre, angles et exclusions, puis lancer la revue sans redemander d'autorisation.
@@ -36,6 +37,19 @@ Résoudre `<skill-dir>` comme le dossier absolu contenant ce `SKILL.md`. Exécut
 Pour un ancien brouillon `schema_version: 0`, utiliser `python3 <skill-dir>/scripts/claude_review.py migrate-config --input <ancien> --output <nouveau>`, faire valider les différences, puis installer le nouveau fichier. Ne jamais migrer implicitement une politique de projet.
 
 Le programme ne conserve dans le projet que la politique et le bloc délimité dans `AGENTS.md`. En cas de bloc incomplet ou de conflit d'instructions, arrêter et demander un arbitrage.
+
+## Désactiver dans le projet
+
+1. Expliquer que la désactivation retire uniquement `.codex/claude-review.json` et le bloc délimité `claude-independent-review` dans le `AGENTS.md` racine. Préciser que tous les rapports, résolutions et dossiers de preuves restent en place.
+2. Une demande explicite de désactivation autorise ces deux retraits. Sinon, obtenir une confirmation avant toute écriture.
+3. Exécuter :
+
+   `python3 <skill-dir>/scripts/claude_review.py disable-policy --project <racine>`
+
+4. Vérifier le résultat JSON : `disabled` indique qu'au moins un élément d'intégration a été retiré ; `already_disabled` indique qu'il n'en restait aucun. Dans les deux cas, `reports_preserved` doit valoir `true`.
+5. Ne jamais supprimer, déplacer ni modifier le répertoire de rapports pendant ce parcours, même s'il devient orphelin de sa politique. Traiter toute demande de suppression des audits comme une action distincte exigeant une autorisation explicite.
+
+La commande est idempotente. Elle refuse un bloc `AGENTS.md` incomplet ou dupliqué avant de retirer la politique et restaure l'état initial si l'une des opérations échoue. Une réactivation ultérieure suit **Initialiser le projet** et ne remplace pas les audits conservés.
 
 ## Préparer une revue
 
