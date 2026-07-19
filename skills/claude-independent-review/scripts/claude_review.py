@@ -4,19 +4,24 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import difflib
 import fnmatch
 import hashlib
 import json
 import os
+import queue
 import re
+import signal
 import shutil
 import stat
 import subprocess
 import sys
 import tempfile
 import textwrap
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Sequence
@@ -28,8 +33,11 @@ AGENTS_START = "<!-- claude-independent-review:start -->"
 AGENTS_END = "<!-- claude-independent-review:end -->"
 EVIDENCE_DIRNAME = ".independent-review-evidence"
 MAX_DIFF_BYTES = 25 * 1024 * 1024
+PROGRESS_HEARTBEAT_SECONDS = 15.0
+SECONDS_PER_MINUTE = 60.0
 ALLOWED_REVIEW_TYPES = {"code", "architecture", "security", "design", "content", "general"}
 ALLOWED_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+MOVING_MODEL_ALIASES = {"sonnet", "opus", "haiku", "fable", "mythos"}
 SAFE_ENV_SUFFIXES = (".example", ".sample", ".template")
 HARD_SECRET_NAMES = {
     ".npmrc",
@@ -70,6 +78,7 @@ REQUIRED_HELP_FLAGS = {
     "--no-chrome",
     "--no-session-persistence",
     "--output-format",
+    "--verbose",
     "--model",
     "--effort",
     "--append-system-prompt",
@@ -78,6 +87,10 @@ REQUIRED_HELP_FLAGS = {
 
 class ReviewError(RuntimeError):
     """Expected failure that must not leave project artifacts."""
+
+
+class ReviewInterrupted(ReviewError):
+    """Review was interrupted and must clean up its transient state."""
 
 
 class ScopeTooLarge(ReviewError):
@@ -138,6 +151,26 @@ class Snapshot:
     git_state: str | None
     diff_text: str | None
     excluded: list[dict[str, str]] = field(default_factory=list)
+
+
+class ProgressReporter:
+    """Emit sanitized, machine-readable progress without touching stdout."""
+
+    def __init__(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self.started = time.monotonic()
+
+    def emit(self, phase: str, event: str, **details: Any) -> None:
+        if not self.enabled:
+            return
+        payload = {
+            "status": "progress",
+            "phase": phase,
+            "event": event,
+            "elapsed_seconds": round(time.monotonic() - self.started, 1),
+            **details,
+        }
+        print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), file=sys.stderr, flush=True)
 
 
 def _reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -239,7 +272,7 @@ def validate_policy(data: dict[str, Any]) -> Policy:
     if effort not in ALLOWED_EFFORTS:
         raise ReviewError(f"claude.effort doit être dans : {', '.join(sorted(ALLOWED_EFFORTS))}")
     model = _string(claude["model"], "claude.model")
-    if model in {"sonnet", "opus", "haiku"}:
+    if model.lower() in MOVING_MODEL_ALIASES:
         raise ReviewError("claude.model doit être un identifiant exact, pas un alias mouvant")
 
     context_files = _string_list(data["context_files"], "context_files", paths=True)
@@ -864,7 +897,57 @@ def doctor(claude_command: str) -> dict[str, str]:
     missing = sorted(flag for flag in REQUIRED_HELP_FLAGS if flag not in help_text)
     if missing:
         raise ReviewError("Claude Code ne prend pas en charge les verrous requis : " + ", ".join(missing))
+    if "stream-json" not in help_text:
+        raise ReviewError("Claude Code ne prend pas en charge la sortie stream-json requise ; mettre à jour Claude Code")
     return {"claude": executable, "version": version, "auth": auth}
+
+
+def _read_process_stream(
+    stream: Any,
+    source: str,
+    messages: queue.Queue[tuple[str, bytes | None]],
+) -> None:
+    try:
+        for line in iter(stream.readline, b""):
+            messages.put((source, line))
+    finally:
+        messages.put((source, None))
+
+
+def _stop_process(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        process.terminate()
+    except OSError:
+        return
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            process.kill()
+            process.wait(timeout=5)
+        except OSError:
+            pass
+
+
+def _stream_activity(event: dict[str, Any]) -> tuple[bool, list[str]]:
+    if event.get("type") != "assistant":
+        return False, []
+    message = event.get("message")
+    if not isinstance(message, dict):
+        return True, []
+    content = message.get("content")
+    if not isinstance(content, list):
+        return True, []
+    tools: list[str] = []
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "tool_use":
+            continue
+        name = block.get("name")
+        if name in {"Read", "Glob", "Grep"}:
+            tools.append(name)
+    return True, tools
 
 
 def invoke_claude(
@@ -873,7 +956,10 @@ def invoke_claude(
     policy: Policy,
     prompt: str,
     mandate_path: Path,
+    reporter: ProgressReporter | None = None,
 ) -> tuple[str, dict[str, Any], str]:
+    reporter = reporter or ProgressReporter(False)
+    reporter.emit("claude", "checking_cli", model=policy.model, effort=policy.effort)
     diagnostic = doctor(claude_command)
     mandate = mandate_path.read_text(encoding="utf-8")
     command = [
@@ -895,44 +981,126 @@ def invoke_claude(
         "--max-turns",
         str(policy.max_turns),
         "--output-format",
-        "json",
+        "stream-json",
+        "--verbose",
         "--append-system-prompt",
         mandate,
     ]
     execution_environment = os.environ.copy()
     execution_environment["CLAUDE_CODE_EFFORT_LEVEL"] = policy.effort
+    process: subprocess.Popen[bytes] | None = None
+    readers: list[threading.Thread] = []
+    stderr_tail = ""
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=snapshot.root,
-            input=prompt.encode("utf-8"),
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=policy.timeout_minutes * 60,
-            check=False,
             env=execution_environment,
         )
-    except subprocess.TimeoutExpired as exc:
-        raise ReviewError(f"La revue Claude a dépassé {policy.timeout_minutes} minutes ; aucun artefact créé") from exc
+        if process.stdin is None or process.stdout is None or process.stderr is None:
+            raise ReviewError("Impossible d'ouvrir les flux de Claude Code")
+        try:
+            process.stdin.write(prompt.encode("utf-8"))
+            process.stdin.flush()
+        except BrokenPipeError:
+            pass
+        finally:
+            try:
+                process.stdin.close()
+            except BrokenPipeError:
+                pass
+
+        messages: queue.Queue[tuple[str, bytes | None]] = queue.Queue()
+        readers = [
+            threading.Thread(target=_read_process_stream, args=(process.stdout, "stdout", messages), daemon=True),
+            threading.Thread(target=_read_process_stream, args=(process.stderr, "stderr", messages), daemon=True),
+        ]
+        for reader in readers:
+            reader.start()
+
+        deadline = time.monotonic() + policy.timeout_minutes * SECONDS_PER_MINUTE
+        next_heartbeat = time.monotonic() + PROGRESS_HEARTBEAT_SECONDS
+        ended: set[str] = set()
+        result_event: dict[str, Any] | None = None
+        turns = 0
+        last_tool: str | None = None
+        reporter.emit("claude", "started", model=policy.model, effort=policy.effort)
+
+        while len(ended) < 2 or process.poll() is None:
+            now = time.monotonic()
+            if now >= deadline:
+                raise ReviewError(
+                    f"La revue Claude a dépassé {policy.timeout_minutes} minutes ; aucun artefact créé"
+                )
+            wait_for = max(0.0, min(0.25, deadline - now, next_heartbeat - now))
+            try:
+                source, raw_line = messages.get(timeout=wait_for)
+            except queue.Empty:
+                now = time.monotonic()
+                if now >= next_heartbeat:
+                    heartbeat: dict[str, Any] = {"turns": turns}
+                    if last_tool is not None:
+                        heartbeat["last_tool"] = last_tool
+                    reporter.emit("claude", "heartbeat", **heartbeat)
+                    next_heartbeat = now + PROGRESS_HEARTBEAT_SECONDS
+                continue
+
+            if raw_line is None:
+                ended.add(source)
+                continue
+            if source == "stderr":
+                stderr_tail = (stderr_tail + raw_line.decode("utf-8", errors="replace"))[-4000:]
+                continue
+
+            try:
+                event = json.loads(raw_line.decode("utf-8"))
+            except (UnicodeError, json.JSONDecodeError) as exc:
+                raise ReviewError("Claude Code a émis un flux stream-json invalide") from exc
+            if not isinstance(event, dict):
+                raise ReviewError("Claude Code a émis un événement stream-json invalide")
+            if event.get("type") == "result":
+                result_event = event
+                continue
+            assistant_activity, tools = _stream_activity(event)
+            if assistant_activity:
+                turns += 1
+                reporter.emit("claude", "turn", turn=turns)
+            for tool in tools:
+                last_tool = tool
+                reporter.emit("claude", "tool", turn=turns, tool=tool)
+
+        return_code = process.wait(timeout=5)
+        if return_code != 0:
+            raise ReviewError(f"Claude Code a échoué ({return_code}) : {stderr_tail.strip() or 'aucun détail'}")
+        if result_event is None:
+            raise ReviewError("Claude Code n'a produit aucun événement final exploitable")
+        response = result_event.get("result")
+        if result_event.get("is_error"):
+            detail = response.strip() if isinstance(response, str) else stderr_tail.strip()
+            raise ReviewError(f"Claude Code a signalé un échec : {detail[-4000:] if detail else 'aucun détail'}")
+        if not isinstance(response, str) or not response.strip():
+            raise ReviewError("Claude Code n'a produit aucun rapport Markdown exploitable")
+        usage = {
+            key: result_event[key]
+            for key in ("total_cost_usd", "duration_ms", "duration_api_ms", "num_turns", "usage", "modelUsage")
+            if key in result_event
+        }
+        return response, usage, diagnostic["version"]
+    except KeyboardInterrupt as exc:
+        raise ReviewInterrupted("Revue interrompue par l'utilisateur ; aucun artefact créé") from exc
     except OSError as exc:
         raise ReviewError(f"Impossible de lancer Claude Code : {exc}") from exc
-    if completed.returncode != 0:
-        stderr = completed.stderr.decode("utf-8", errors="replace").strip()
-        if len(stderr) > 4000:
-            stderr = stderr[-4000:]
-        raise ReviewError(f"Claude Code a échoué ({completed.returncode}) : {stderr or 'aucun détail'}")
-    try:
-        envelope = json.loads(completed.stdout.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
-        raise ReviewError("Claude Code n'a pas renvoyé une enveloppe JSON UTF-8 valide") from exc
-    if not isinstance(envelope, dict) or not isinstance(envelope.get("result"), str) or not envelope["result"].strip():
-        raise ReviewError("Claude Code n'a produit aucun rapport Markdown exploitable")
-    usage = {
-        key: envelope[key]
-        for key in ("total_cost_usd", "duration_ms", "duration_api_ms", "num_turns", "usage", "modelUsage")
-        if key in envelope
-    }
-    return envelope["result"], usage, diagnostic["version"]
+    finally:
+        if process is not None:
+            _stop_process(process)
+            for reader in readers:
+                reader.join(timeout=1)
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
 
 
 def _slug(value: str) -> str:
@@ -1102,6 +1270,8 @@ def persist_audit(
 
 
 def command_review(arguments: argparse.Namespace, skill_root: Path) -> dict[str, Any]:
+    reporter = ProgressReporter(arguments.progress)
+    reporter.emit("validate", "started")
     project_root = Path(arguments.project).resolve()
     if not project_root.is_dir():
         raise ReviewError(f"Racine de projet absente : {project_root}")
@@ -1126,7 +1296,9 @@ def command_review(arguments: argparse.Namespace, skill_root: Path) -> dict[str,
     test_evidence = [Path(value).resolve() if Path(value).is_absolute() else project_root / value for value in arguments.test_evidence]
     if arguments.kind == "counter" and not audit_context:
         raise ReviewError("Une contre-revue exige au moins un --audit-context")
+    reporter.emit("validate", "completed", model=policy.model, effort=policy.effort)
     with tempfile.TemporaryDirectory(prefix="claude-independent-review-") as temporary_name:
+        reporter.emit("snapshot", "started")
         snapshot = build_snapshot(
             project_root,
             policy,
@@ -1135,6 +1307,12 @@ def command_review(arguments: argparse.Namespace, skill_root: Path) -> dict[str,
             baseline,
             audit_context,
             test_evidence,
+        )
+        reporter.emit(
+            "snapshot",
+            "completed",
+            file_count=snapshot.manifest["file_count"],
+            total_bytes=snapshot.manifest["total_bytes"],
         )
         prompt = compose_prompt(
             mission,
@@ -1151,10 +1329,12 @@ def command_review(arguments: argparse.Namespace, skill_root: Path) -> dict[str,
             policy,
             prompt,
             skill_root / "references/reviewer-mandate.md",
+            reporter,
         )
         slug = arguments.slug or "-".join(arguments.milestone) or "independent-review"
         if arguments.kind == "counter" and "counter" not in slug:
             slug += "-counter-review"
+        reporter.emit("persist", "started")
         report_path, evidence_path = persist_audit(
             project_root,
             policy,
@@ -1168,12 +1348,40 @@ def command_review(arguments: argparse.Namespace, skill_root: Path) -> dict[str,
             arguments.milestone,
             slug,
         )
+        reporter.emit("persist", "completed")
+    reporter.emit("complete", "created")
     return {
         "status": "created",
         "report": str(report_path),
         "evidence": str(evidence_path),
         "snapshot_sha256": snapshot.manifest["snapshot_sha256"],
     }
+
+
+@contextlib.contextmanager
+def _translated_interrupts() -> Iterable[None]:
+    previous: dict[int, Any] = {}
+
+    def interrupt(signum: int, _frame: Any) -> None:
+        try:
+            name = signal.Signals(signum).name
+        except ValueError:
+            name = str(signum)
+        raise ReviewInterrupted(f"Revue interrompue par {name} ; aucun artefact créé")
+
+    if threading.current_thread() is threading.main_thread():
+        for candidate in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None)):
+            if candidate is None:
+                continue
+            previous[candidate] = signal.getsignal(candidate)
+            signal.signal(candidate, interrupt)
+    try:
+        yield
+    except KeyboardInterrupt as exc:
+        raise ReviewInterrupted("Revue interrompue par l'utilisateur ; aucun artefact créé") from exc
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1209,6 +1417,7 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument("--audit-context", action="append", default=[])
     review_parser.add_argument("--slug")
     review_parser.add_argument("--claude", default="claude")
+    review_parser.add_argument("--progress", action="store_true", help="Émettre une progression JSONL expurgée sur stderr")
     return parser
 
 
@@ -1217,36 +1426,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     skill_root = Path(__file__).resolve().parents[1]
     try:
-        if arguments.command == "doctor":
-            result: Any = {"status": "ready", **doctor(arguments.claude)}
-        elif arguments.command == "validate-config":
-            project_root = Path(arguments.project).resolve()
-            _, policy = load_policy(project_root)
-            result = {
-                "status": "valid",
-                "project": policy.project_name,
-                "schema_version": SCHEMA_VERSION,
-                "milestones": [milestone.identifier for milestone in policy.milestones],
-            }
-        elif arguments.command == "install-policy":
-            project_root = Path(arguments.project).resolve()
-            install_policy(project_root, Path(arguments.config).resolve(), arguments.replace)
-            result = {
-                "status": "installed",
-                "config": str(project_root / CONFIG_RELATIVE),
-                "agents": str(project_root / "AGENTS.md"),
-            }
-        elif arguments.command == "migrate-config":
-            migrated = migrate_policy(load_json(Path(arguments.input).resolve()))
-            output_path = Path(arguments.output).resolve()
-            _atomic_write(
-                output_path,
-                (json.dumps(migrated, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
-                replace=False,
-            )
-            result = {"status": "migrated", "schema_version": SCHEMA_VERSION, "output": str(output_path)}
-        else:
-            result = command_review(arguments, skill_root)
+        with _translated_interrupts():
+            if arguments.command == "doctor":
+                result: Any = {"status": "ready", **doctor(arguments.claude)}
+            elif arguments.command == "validate-config":
+                project_root = Path(arguments.project).resolve()
+                _, policy = load_policy(project_root)
+                result = {
+                    "status": "valid",
+                    "project": policy.project_name,
+                    "schema_version": SCHEMA_VERSION,
+                    "milestones": [milestone.identifier for milestone in policy.milestones],
+                }
+            elif arguments.command == "install-policy":
+                project_root = Path(arguments.project).resolve()
+                install_policy(project_root, Path(arguments.config).resolve(), arguments.replace)
+                result = {
+                    "status": "installed",
+                    "config": str(project_root / CONFIG_RELATIVE),
+                    "agents": str(project_root / "AGENTS.md"),
+                }
+            elif arguments.command == "migrate-config":
+                migrated = migrate_policy(load_json(Path(arguments.input).resolve()))
+                output_path = Path(arguments.output).resolve()
+                _atomic_write(
+                    output_path,
+                    (json.dumps(migrated, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+                    replace=False,
+                )
+                result = {"status": "migrated", "schema_version": SCHEMA_VERSION, "output": str(output_path)}
+            else:
+                result = command_review(arguments, skill_root)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except ScopeTooLarge as exc:

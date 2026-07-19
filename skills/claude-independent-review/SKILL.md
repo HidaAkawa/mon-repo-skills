@@ -20,16 +20,18 @@ Résoudre `<skill-dir>` comme le dossier absolu contenant ce `SKILL.md`. Exécut
 
 ## Initialiser le projet
 
-1. Inspecter le projet en lecture seule. Lire [references/configuration.md](references/configuration.md).
-2. Proposer en un seul tableau : nom, langue, modèle exact, effort, sources de vérité, exclusions supplémentaires, seuils et jalons adaptés.
-3. Utiliser par défaut `claude-sonnet-5`, `high`, `fr`, 20 minutes, 40 tours, `docs/reviews`, 20 000 fichiers et 262 144 000 octets.
-4. Demander une validation groupée avant toute écriture.
-5. Écrire la proposition JSON dans un fichier temporaire hors du projet, puis exécuter :
+1. Lire [references/configuration.md](references/configuration.md). Demander immédiatement et de manière bloquante le modèle Claude à enregistrer, avant toute autre question de configuration. Utiliser le sélecteur natif de l'environnement et le catalogue versionné de la référence. Si le sélecteur ne peut pas présenter les quatre modèles et une saisie libre, proposer d'abord `claude-sonnet-5`, `claude-opus-4-8` et « autres options », puis proposer `claude-fable-5`, `claude-haiku-4-5-20251001` et la saisie d'un identifiant exact. Recommander `claude-sonnet-5`, mais ne jamais le choisir sans réponse.
+2. Ne pas redemander le modèle lorsqu'une politique existe déjà. Pour le modifier, suivre le parcours de remplacement explicite décrit plus bas.
+3. Inspecter le projet en lecture seule.
+4. Proposer en un seul tableau : nom, langue, modèle exact choisi, effort, sources de vérité, exclusions supplémentaires, seuils et jalons adaptés.
+5. Utiliser par défaut `high`, `fr`, 20 minutes, 40 tours, `docs/reviews`, 20 000 fichiers et 262 144 000 octets.
+6. Demander une validation groupée avant toute écriture.
+7. Écrire la proposition JSON dans un fichier temporaire hors du projet, puis exécuter :
 
    `python3 <skill-dir>/scripts/claude_review.py install-policy --project <racine> --config <proposition.json>`
 
-6. Supprimer le fichier de proposition temporaire. Vérifier la configuration avec `validate-config`.
-7. Pour modifier une politique existante, présenter les différences, obtenir l'accord, puis utiliser `install-policy --replace`. Ne jamais modifier silencieusement modèle, effort, jalons ou sources de vérité.
+8. Supprimer le fichier de proposition temporaire. Vérifier la configuration avec `validate-config`.
+9. Pour modifier une politique existante, présenter les différences, obtenir l'accord, puis utiliser `install-policy --replace`. Ne jamais modifier silencieusement modèle, effort, jalons ou sources de vérité.
 
 Pour un ancien brouillon `schema_version: 0`, utiliser `python3 <skill-dir>/scripts/claude_review.py migrate-config --input <ancien> --output <nouveau>`, faire valider les différences, puis installer le nouveau fichier. Ne jamais migrer implicitement une politique de projet.
 
@@ -52,12 +54,15 @@ python3 <skill-dir>/scripts/claude_review.py review \
   --mission-file <mission-ou-> \
   --review-type code \
   --milestone <identifiant> \
+  --progress \
   [--test-evidence <sortie-brute>] \
   [--audit-context <rapport-ou-resolution>] \
   [--include <glob>]
 ```
 
-Utiliser `--kind counter` pour une contre-revue. Le runner travaille dans un snapshot temporaire, n'expose à Claude que `Read`, `Glob` et `Grep`, et ne conserve aucun snapshot, log, cache ou artefact d'échec. Il imprime en JSON les chemins du rapport et des preuves créés.
+Utiliser `--kind counter` pour une contre-revue. Passer toujours `--progress` lorsque le skill lance une revue. Le runner émet alors sur `stderr` une progression JSONL expurgée avec les phases, la durée, les tours, les outils de lecture et un battement toutes les 15 secondes ; ne pas interpréter ces lignes comme le rapport. Il réserve `stdout` au résultat JSON final.
+
+Le runner travaille dans un snapshot temporaire, n'expose à Claude que `Read`, `Glob` et `Grep`, et ne conserve aucun snapshot, log, cache ou artefact d'échec. Après une interruption contrôlée, expliquer l'erreur à partir de la dernière phase visible. Un arrêt non interceptable comme `SIGKILL` ne peut révéler que le dernier événement déjà émis.
 
 ## Arbitrer et résoudre
 
