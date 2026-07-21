@@ -12,6 +12,7 @@ propres à une plateforme.
 | Skill | Rôle | Claude | Codex |
 |---|---|:---:|:---:|
 | [`grill-me`](skills/shared/grill-me/) | Interroge sans relâche sur un plan ou une conception jusqu'à compréhension partagée | ✓ | ✓ |
+| [`std-dev-project`](skills/shared/std-dev-project/) | Conduit un projet de développement selon un cycle en sept étapes imposées, documenté et versionné | ✓ | ✓ |
 | [`claude-independent-review`](skills/codex/claude-independent-review/) | Fait intervenir Claude comme reviewer indépendant en lecture seule, Codex gardant l'arbitrage | — | ✓ |
 
 ## Installation
@@ -78,7 +79,8 @@ modifiée : la copie écrase sans prévenir.
 ```text
 skills/
 ├── shared/     skills fonctionnant sur Claude Code et Codex
-│   └── grill-me/
+│   ├── grill-me/
+│   └── std-dev-project/
 └── codex/      skills dépendant de fonctions propres à Codex
     └── claude-independent-review/
 ```
