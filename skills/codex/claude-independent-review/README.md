@@ -11,7 +11,8 @@ du design ou du contenu.
 
 ## Workflow
 
-1. Codex inspecte le projet et fait valider une politique de revue.
+1. Pour un projet neuf, Codex fait choisir explicitement le modèle Claude, puis
+   inspecte le projet et fait valider une politique de revue.
 2. Le runner fabrique un snapshot temporaire et filtré du projet.
 3. Claude Code reçoit une mission neutre et ne dispose que de `Read`, `Glob` et
    `Grep`.
@@ -19,6 +20,17 @@ du design ou du contenu.
 5. Codex vérifie chaque constat, applique les corrections autorisées et consigne
    ses décisions dans une résolution séparée.
 6. Toute contre-revue doit être confirmée explicitement.
+
+## Choix du modèle
+
+À la première configuration, le skill **demande le modèle de façon bloquante**,
+avant toute autre question. Il propose Sonnet 5, Opus 4.8, Fable 5, Haiku 4.5 ou
+la saisie d'un identifiant exact. `claude-sonnet-5` est recommandé mais **n'est
+jamais retenu sans réponse**.
+
+Le choix est ensuite réutilisé sans être redemandé. Pour en changer, passer par
+le remplacement explicite de politique : le skill ne modifie jamais
+silencieusement le modèle, l'effort, les jalons ou les sources de vérité.
 
 ## Sécurité et traçabilité
 
@@ -28,6 +40,9 @@ du design ou du contenu.
 - Aucun shell, navigateur, MCP ou lancement de tests n'est accessible à Claude.
 - Le modèle et l'effort configurés sont utilisés exactement, sans fallback
   silencieux.
+- Pendant une revue, une progression JSONL expurgée est émise sur `stderr` :
+  phase, durée, tours et outils de lecture, avec un battement toutes les
+  15 secondes. `stdout` reste réservé au résultat JSON final.
 - Les snapshots, prompts temporaires, logs, caches et tentatives échouées sont
   supprimés.
 - Seuls les éléments utiles à l'audit restent dans le projet : politique,
@@ -36,10 +51,27 @@ du design ou du contenu.
 - Le skill ne committe, ne pousse et ne publie jamais les artefacts d'un projet
   sans demande distincte.
 
-Par défaut, les revues utilisent `claude-sonnet-5`, l'effort `high`, le
-français, un timeout de 20 minutes et au plus 40 tours. Le snapshot est limité à
+Autres valeurs par défaut : effort `high`, français, timeout de 20 minutes, au
+plus 40 tours, rapports dans `docs/reviews`. Le snapshot est limité à
 20 000 fichiers et 250 Mio ; au-delà, le runner s'arrête et demande un cadrage
 explicite.
+
+## Désactiver dans un projet
+
+La désactivation retire **uniquement** `.codex/claude-review.json` et le bloc
+délimité dans le `AGENTS.md` racine :
+
+```bash
+python3 <skill-dir>/scripts/claude_review.py disable-policy --project <racine>
+```
+
+**Tous les rapports, résolutions et dossiers de preuves restent en place.** La
+commande est idempotente, refuse un bloc `AGENTS.md` incomplet ou dupliqué, et
+restaure l'état initial si une opération échoue. Supprimer les audits eux-mêmes
+est une action distincte, qui exige une autorisation explicite.
+
+Une réactivation ultérieure suit le parcours d'initialisation et ne remplace
+jamais les audits conservés.
 
 ## Prérequis spécifiques
 
@@ -65,7 +97,8 @@ La [documentation officielle](https://code.claude.com/docs/en/setup) décrit
 aussi les installations avec Homebrew, WinGet et les gestionnaires de paquets
 Linux.
 
-S'authentifier séparément sur chaque machine :
+Les identifiants ne sont jamais inclus dans ce dépôt. S'authentifier séparément
+sur chaque machine :
 
 ```text
 gh auth login
@@ -113,9 +146,10 @@ Dans une nouvelle tâche Codex ouverte à la racine du projet :
 Utilise $claude-independent-review pour configurer des revues indépendantes sur ce projet.
 ```
 
-Codex inspectera d'abord le projet et proposera en une seule fois : langue,
-modèle, effort, sources de vérité, exclusions, seuils et jalons. **Aucun fichier
-ne sera créé avant validation.** Après accord, le skill ajoutera :
+Codex demandera d'abord le modèle, puis inspectera le projet et proposera en une
+seule fois : langue, effort, sources de vérité, exclusions, seuils et jalons.
+**Aucun fichier ne sera créé avant validation.** Après accord, le skill
+ajoutera :
 
 - `.codex/claude-review.json`, la politique versionnable du projet ;
 - un petit bloc délimité dans le `AGENTS.md` racine.

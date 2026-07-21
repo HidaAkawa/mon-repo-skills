@@ -3,6 +3,8 @@
 ## Table des matières
 
 - [Emplacement et cycle de vie](#emplacement-et-cycle-de-vie)
+- [Désactivation](#désactivation)
+- [Choix du modèle Claude](#choix-du-modèle-claude)
 - [Schéma version 1](#schéma-version-1)
 - [Jalons](#jalons)
 - [Règles de chemins](#règles-de-chemins)
@@ -13,6 +15,28 @@
 Conserver la politique dans `.codex/claude-review.json`. La faire valider par `<skill-dir>/scripts/claude_review.py validate-config`. Toute évolution doit être présentée à l'utilisateur avant `install-policy --replace`.
 
 Le runner accepte uniquement `schema_version: 1`. Un numéro futur ou inconnu est refusé sans migration implicite. Le sous-programme `migrate-config` peut convertir explicitement un brouillon version 0 en ajoutant les valeurs désormais obligatoires `max_turns`, `max_files` et `max_bytes`; il écrit toujours un nouveau fichier et ne remplace jamais l'original.
+
+## Désactivation
+
+`disable-policy --project <racine>` retire uniquement `.codex/claude-review.json` et le bloc délimité géré par le skill dans `AGENTS.md`. La commande ne parcourt pas le répertoire `reports.directory` et ne supprime ni rapports, ni résolutions, ni preuves. Elle est idempotente et restaure la politique et `AGENTS.md` si une opération échoue.
+
+Après désactivation, les audits restent des artefacts autonomes du projet. Une réactivation installe une nouvelle politique selon le parcours normal sans écraser ces fichiers.
+
+## Choix du modèle Claude
+
+Pour un projet sans politique, faire choisir une seule fois un modèle avant de proposer le reste de la configuration. Enregistrer l'identifiant exact choisi dans `claude.model`. Ne pas reposer la question lors des revues suivantes.
+
+Catalogue versionné :
+
+| Choix | Identifiant exact | Profil |
+|---:|---|---|
+| 1 | `claude-sonnet-5` | Équilibre capacité, rapidité et coût ; choix recommandé. |
+| 2 | `claude-opus-4-8` | Revue plus approfondie, avec un coût et une latence supérieurs. |
+| 3 | `claude-fable-5` | Capacité maximale, avec le coût et la latence les plus élevés. |
+| 4 | `claude-haiku-4-5-20251001` | Rapidité et coût réduit, pour une revue moins exigeante. |
+| 5 | Identifiant fourni par l'utilisateur | Accepter un autre identifiant exact pris en charge par son environnement. |
+
+Ne pas transformer un choix en alias `sonnet`, `opus`, `fable`, `haiku` ou `mythos` : ces alias peuvent changer de cible. Pour une politique existante, traiter un changement de modèle comme toute autre modification sensible : présenter la différence, obtenir l'accord, puis exécuter `install-policy --replace`.
 
 ## Schéma version 1
 
@@ -83,4 +107,4 @@ Après succès seulement :
 - `docs/reviews/evidence/<même-identifiant>/manifest.json` ;
 - `docs/reviews/evidence/<même-identifiant>/diff.patch` en mode Git si le diff n'est pas vide.
 
-Le rapport contient la mission exacte, les métadonnées et la réponse Claude intacte. Aucun snapshot, prompt séparé, stderr, session, cache ou artefact de tentative échouée ne doit subsister.
+Le rapport contient la mission exacte, les métadonnées et la réponse Claude intacte. La progression `--progress` reste uniquement dans le terminal. Aucun snapshot, prompt séparé, stderr, session, cache, journal de progression ou artefact de tentative échouée ne doit subsister.

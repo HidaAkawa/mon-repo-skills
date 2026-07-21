@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -59,7 +60,7 @@ def make_fake_claude(directory: Path) -> Path:
     executable = directory / "fake-claude"
     executable.write_text(
         """#!/usr/bin/env python3
-import json, os, sys
+import json, os, sys, time
 args = sys.argv[1:]
 log = os.environ.get('FAKE_CLAUDE_LOG')
 if log:
@@ -70,20 +71,33 @@ if args == ['--version']:
 elif args == ['auth', 'status', '--text']:
     print('Login method: fixture')
 elif args == ['--help']:
-    print('--safe-mode --tools --permission-mode --strict-mcp-config --disable-slash-commands --no-chrome --no-session-persistence --output-format --model --effort --append-system-prompt')
+    suffix = '' if os.environ.get('FAKE_CLAUDE_NO_STREAM') else ' stream-json'
+    print('--safe-mode --tools --permission-mode --strict-mcp-config --disable-slash-commands --no-chrome --no-session-persistence --output-format' + suffix + ' --verbose --model --effort --append-system-prompt')
 else:
     prompt = sys.stdin.read()
     mode = os.environ.get('FAKE_CLAUDE_MODE', 'success')
+    delay = float(os.environ.get('FAKE_CLAUDE_DELAY', '0'))
+    if delay:
+        time.sleep(delay)
     if mode == 'failure':
         print('fixture failure', file=sys.stderr)
         raise SystemExit(75)
+    if mode == 'large-stderr-failure':
+        print('x' * 5000 + ' fixture tail', file=sys.stderr)
+        raise SystemExit(76)
     if mode == 'invalid-json':
         print('not-json')
+    elif mode == 'missing-result':
+        print(json.dumps({'type': 'system', 'subtype': 'init'}), flush=True)
+        print(json.dumps({'type': 'assistant', 'message': {'content': []}}), flush=True)
     elif mode == 'empty':
-        print(json.dumps({'result': '   '}))
+        print(json.dumps({'type': 'result', 'result': '   '}), flush=True)
     else:
         result = os.environ.get('FAKE_CLAUDE_RESULT', '# Revue\\n\\n## Verdict\\nPASS')
-        print(json.dumps({'result': result, 'num_turns': 3, 'usage': {'input_tokens': 10}, 'prompt_seen': bool(prompt)}))
+        print(json.dumps({'type': 'system', 'subtype': 'init'}), flush=True)
+        print(json.dumps({'type': 'assistant', 'message': {'content': [{'type': 'tool_use', 'name': 'Read', 'input': {'file_path': '/secret/path'}}]}}), flush=True)
+        print(json.dumps({'type': 'assistant', 'message': {'content': [{'type': 'text', 'text': 'draft content must stay private'}]}}), flush=True)
+        print(json.dumps({'type': 'result', 'subtype': 'success', 'result': result, 'num_turns': 3, 'usage': {'input_tokens': 10}, 'prompt_seen': bool(prompt)}), flush=True)
 """,
         encoding="utf-8",
     )
@@ -109,10 +123,12 @@ class ConfigurationTests(unittest.TestCase):
     def test_validates_version_one_and_rejects_aliases(self):
         parsed = review.validate_policy(policy_data())
         self.assertEqual(parsed.model, "claude-sonnet-5")
-        invalid = policy_data()
-        invalid["claude"]["model"] = "sonnet"
-        with self.assertRaisesRegex(review.ReviewError, "alias mouvant"):
-            review.validate_policy(invalid)
+        for alias in ("sonnet", "opus", "haiku", "fable", "mythos", "FABLE"):
+            with self.subTest(alias=alias):
+                invalid = policy_data()
+                invalid["claude"]["model"] = alias
+                with self.assertRaisesRegex(review.ReviewError, "alias mouvant"):
+                    review.validate_policy(invalid)
 
     def test_rejects_unknown_schema_without_implicit_migration(self):
         invalid = policy_data(schema_version=2)
@@ -158,6 +174,109 @@ class ConfigurationTests(unittest.TestCase):
             with self.assertRaisesRegex(review.ReviewError, "incomplet"):
                 review.install_policy(root, proposal, replace=False)
             self.assertFalse((root / review.CONFIG_RELATIVE).exists())
+            proposal.unlink()
+
+    def test_disables_policy_idempotently_without_touching_audit_artifacts(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            proposal = root.parent / f"{root.name}-proposal.json"
+            write_json(proposal, policy_data())
+            original_agents = "# Existing instructions\n\nKeep this content.\n"
+            (root / "AGENTS.md").write_text(original_agents, encoding="utf-8")
+            review.install_policy(root, proposal, replace=False)
+
+            report = root / "docs/reviews/2026-01-01-lot-ready-claude.md"
+            manifest = root / "docs/reviews/evidence/2026-01-01-lot-ready-claude/manifest.json"
+            resolution = root / "docs/reviews/2026-01-01-lot-ready-resolution.md"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            manifest.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text("immutable report\n", encoding="utf-8")
+            manifest.write_text('{"sha256": "fixture"}\n', encoding="utf-8")
+            resolution.write_text("resolution record\n", encoding="utf-8")
+            audit_before = {
+                path.relative_to(root).as_posix(): path.read_bytes()
+                for path in (report, manifest, resolution)
+            }
+
+            result = review.disable_policy(root)
+
+            self.assertEqual(result["status"], "disabled")
+            self.assertCountEqual(result["removed"], ["agents_pointer", "policy"])
+            self.assertTrue(result["reports_preserved"])
+            self.assertFalse((root / review.CONFIG_RELATIVE).exists())
+            agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertIn("Keep this content.", agents)
+            self.assertNotIn(review.AGENTS_START, agents)
+            self.assertNotIn(review.AGENTS_END, agents)
+            audit_after = {
+                path.relative_to(root).as_posix(): path.read_bytes()
+                for path in (report, manifest, resolution)
+            }
+            self.assertEqual(audit_after, audit_before)
+
+            second = review.disable_policy(root)
+            self.assertEqual(second["status"], "already_disabled")
+            self.assertEqual(second["removed"], [])
+            self.assertEqual(audit_after, audit_before)
+            proposal.unlink()
+
+    def test_disable_refuses_partial_pointer_before_removing_policy(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            config_path = root / review.CONFIG_RELATIVE
+            write_json(config_path, policy_data())
+            original_config = config_path.read_bytes()
+            (root / "AGENTS.md").write_text(review.AGENTS_START + "\n", encoding="utf-8")
+            report = root / "docs/reviews/existing.md"
+            report.parent.mkdir(parents=True)
+            report.write_text("preserve me\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(review.ReviewError, "incomplet"):
+                review.disable_policy(root)
+
+            self.assertEqual(config_path.read_bytes(), original_config)
+            self.assertEqual(report.read_text(encoding="utf-8"), "preserve me\n")
+
+    def test_disable_policy_cli_reports_preservation(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            write_json(root / review.CONFIG_RELATIVE, policy_data())
+            (root / "AGENTS.md").write_text(review.render_agents(None, "fr"), encoding="utf-8")
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                return_code = review.main(["disable-policy", "--project", str(root)])
+
+            self.assertEqual(return_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["status"], "disabled")
+            self.assertTrue(payload["reports_preserved"])
+            self.assertEqual((root / "AGENTS.md").read_text(encoding="utf-8"), "")
+
+    def test_disable_rolls_back_pointer_when_policy_removal_fails(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            proposal = root.parent / f"{root.name}-proposal.json"
+            write_json(proposal, policy_data())
+            (root / "AGENTS.md").write_text("# Existing\n", encoding="utf-8")
+            review.install_policy(root, proposal, replace=False)
+            config_path = root / review.CONFIG_RELATIVE
+            agents_path = root / "AGENTS.md"
+            config_before = config_path.read_bytes()
+            agents_before = agents_path.read_bytes()
+            real_unlink = Path.unlink
+
+            def fail_policy_unlink(path, *args, **kwargs):
+                if path == config_path:
+                    raise OSError("fixture removal failure")
+                return real_unlink(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "unlink", autospec=True, side_effect=fail_policy_unlink):
+                with self.assertRaisesRegex(OSError, "fixture removal failure"):
+                    review.disable_policy(root)
+
+            self.assertEqual(config_path.read_bytes(), config_before)
+            self.assertEqual(agents_path.read_bytes(), agents_before)
             proposal.unlink()
 
     def test_rejects_duplicate_agents_blocks(self):
@@ -309,20 +428,64 @@ class ReviewExecutionTests(unittest.TestCase):
                 "--disable-slash-commands",
                 "--no-chrome",
                 "--no-session-persistence",
+                "--verbose",
                 "claude-sonnet-5",
                 "high",
             ]:
                 self.assertIn(expected, args)
             self.assertEqual(args[args.index("--tools") + 1], "Read,Glob,Grep")
+            self.assertEqual(args[args.index("--output-format") + 1], "stream-json")
             self.assertNotIn("--fallback-model", args)
             self.assertNotIn("--dangerously-skip-permissions", args)
             self.assertNotIn("Bash", args)
             project_names = {path.name for path in root.rglob("*")}
             self.assertNotIn(review.EVIDENCE_DIRNAME, project_names)
             self.assertFalse(any(name.startswith(".claude-review") for name in project_names))
+            self.assertEqual(error, "")
+
+    def test_progress_is_jsonl_sanitized_and_keeps_stdout_parseable(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            container = Path(container_name)
+            root, fake = self._project_and_fake(container)
+            result = "# Sensitive final report\n"
+            with temporary_environment(FAKE_CLAUDE_RESULT=result):
+                status, output, error = self._invoke(root, fake, ["--progress"])
+            self.assertEqual(status, 0, error)
+            self.assertEqual(json.loads(output)["status"], "created")
+            events = [json.loads(line) for line in error.splitlines()]
+            self.assertTrue(events)
+            self.assertTrue(all(event["status"] == "progress" for event in events))
+            phases = {event["phase"] for event in events}
+            self.assertEqual(phases, {"validate", "snapshot", "claude", "persist", "complete"})
+            self.assertTrue(any(event.get("tool") == "Read" for event in events))
+            self.assertTrue(any(event.get("turn") for event in events))
+            self.assertNotIn("Sensitive final report", error)
+            self.assertNotIn("draft content", error)
+            self.assertNotIn("/secret/path", error)
+            self.assertNotIn("Examiner le lot", error)
+
+    def test_progress_heartbeat_reports_liveness(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            container = Path(container_name)
+            root, fake = self._project_and_fake(container)
+            with temporary_environment(FAKE_CLAUDE_DELAY=0.08), mock.patch.object(
+                review, "PROGRESS_HEARTBEAT_SECONDS", 0.02
+            ):
+                status, _, error = self._invoke(root, fake, ["--progress"])
+            self.assertEqual(status, 0, error)
+            events = [json.loads(line) for line in error.splitlines()]
+            self.assertTrue(any(event.get("event") == "heartbeat" for event in events))
+
+    def test_doctor_rejects_cli_without_stream_json(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            fake = make_fake_claude(Path(container_name))
+            with temporary_environment(FAKE_CLAUDE_NO_STREAM=1), self.assertRaisesRegex(
+                review.ReviewError, "stream-json"
+            ):
+                review.doctor(str(fake))
 
     def test_failure_modes_leave_no_report_or_evidence(self):
-        for mode in ("failure", "invalid-json", "empty"):
+        for mode in ("failure", "invalid-json", "missing-result", "empty"):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as container_name:
                 container = Path(container_name)
                 root, fake = self._project_and_fake(container)
@@ -331,6 +494,47 @@ class ReviewExecutionTests(unittest.TestCase):
                 self.assertNotEqual(status, 0)
                 self.assertFalse((root / "docs/reviews").exists())
                 self.assertFalse(any(path.name.startswith(".claude-review") for path in root.rglob("*")))
+
+    def test_failure_keeps_only_bounded_stderr_tail_in_terminal(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            container = Path(container_name)
+            root, fake = self._project_and_fake(container)
+            with temporary_environment(FAKE_CLAUDE_MODE="large-stderr-failure"):
+                status, _, error = self._invoke(root, fake)
+            self.assertNotEqual(status, 0)
+            self.assertIn("fixture tail", error)
+            self.assertLess(len(error), 4300)
+            self.assertFalse((root / "docs/reviews").exists())
+
+    def test_timeout_stops_claude_without_artifacts(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            container = Path(container_name)
+            root, fake = self._project_and_fake(container)
+            with temporary_environment(FAKE_CLAUDE_DELAY=1), mock.patch.object(
+                review, "SECONDS_PER_MINUTE", 0.01
+            ):
+                status, _, error = self._invoke(root, fake, ["--progress"])
+            self.assertNotEqual(status, 0)
+            self.assertIn("dépassé", error)
+            self.assertFalse((root / "docs/reviews").exists())
+
+    def test_keyboard_interrupt_stops_claude_without_artifacts(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            container = Path(container_name)
+            root, fake = self._project_and_fake(container)
+            with mock.patch.object(review.queue.Queue, "get", side_effect=KeyboardInterrupt):
+                status, _, error = self._invoke(root, fake, ["--progress"])
+            self.assertNotEqual(status, 0)
+            self.assertIn("interrompue", error)
+            self.assertFalse((root / "docs/reviews").exists())
+
+    def test_termination_signals_become_controlled_interruptions(self):
+        for signum in (getattr(review.signal, "SIGTERM", None), getattr(review.signal, "SIGHUP", None)):
+            if signum is None:
+                continue
+            with self.subTest(signal=signum), self.assertRaisesRegex(review.ReviewInterrupted, "interrompue"):
+                with review._translated_interrupts():
+                    os.kill(os.getpid(), signum)
 
     def test_two_successes_never_overwrite(self):
         with tempfile.TemporaryDirectory() as container_name:
