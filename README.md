@@ -15,6 +15,7 @@ propres à une plateforme.
 | [`std-dev-project`](skills/shared/std-dev-project/) | Conduit un projet de développement selon un cycle en sept étapes imposées, documenté et versionné | ✓ | ✓ |
 | [`claude-independent-review`](skills/codex/claude-independent-review/) | Fait intervenir Claude comme reviewer indépendant en lecture seule, Codex gardant l'arbitrage | — | ✓ |
 | [`plan-delegate-verify`](skills/codex/plan-delegate-verify/) | Planifie des lots indépendants, les délègue à des sous-agents calibrés et vérifie chaque résultat sur preuves | — | ✓ |
+| [`plan-delegate-verify`](skills/claude/plan-delegate-verify/) | Version native Claude Code du précédent : mêmes lots, délégation et vérification, portés sur l'outil Agent | ✓ | — |
 
 ## Installation
 
@@ -41,9 +42,9 @@ cd mon-repo-skills
 mkdir -p ~/.codex/skills
 cp -R skills/codex/* skills/shared/* ~/.codex/skills/
 
-# Pour Claude Code : les skills communs (et les skills Claude, le cas échéant)
+# Pour Claude Code : les skills Claude et les skills communs
 mkdir -p ~/.claude/skills
-cp -R skills/shared/* ~/.claude/skills/
+cp -R skills/claude/* skills/shared/* ~/.claude/skills/
 ```
 
 ### Windows PowerShell
@@ -58,7 +59,7 @@ Copy-Item -Recurse -Force ".\skills\codex\*", ".\skills\shared\*" $codex
 
 $claude = Join-Path $env:USERPROFILE ".claude\skills"
 New-Item -ItemType Directory -Force -Path $claude | Out-Null
-Copy-Item -Recurse -Force ".\skills\shared\*" $claude
+Copy-Item -Recurse -Force ".\skills\claude\*", ".\skills\shared\*" $claude
 ```
 
 Chaque skill doit finalement se trouver sous
@@ -82,13 +83,15 @@ skills/
 ├── shared/     skills fonctionnant sur Claude Code et Codex
 │   ├── grill-me/
 │   └── std-dev-project/
-└── codex/      skills dépendant de fonctions propres à Codex
-    ├── claude-independent-review/
+├── codex/      skills dépendant de fonctions propres à Codex
+│   ├── claude-independent-review/
+│   └── plan-delegate-verify/
+└── claude/     skills dépendant de fonctions propres à Claude Code
     └── plan-delegate-verify/
 ```
 
-Un répertoire `claude/` sera ajouté le jour où un skill dépendra de fonctions
-propres à Claude Code.
+Le répertoire `claude/` regroupe les skills qui dépendent de fonctions propres à
+Claude Code (outil Agent, suivi de tâches).
 
 La compatibilité est aussi déclarée dans le README de chaque skill, qui fait
 foi : si un skill change de catégorie, son répertoire suit, mais sa
