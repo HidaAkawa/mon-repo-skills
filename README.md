@@ -14,6 +14,7 @@ propres à une plateforme.
 | [`grill-me`](skills/shared/grill-me/) | Interroge sans relâche sur un plan ou une conception jusqu'à compréhension partagée | ✓ | ✓ |
 | [`std-dev-project`](skills/shared/std-dev-project/) | Conduit un projet de développement selon un cycle en sept étapes imposées, documenté et versionné | ✓ | ✓ |
 | [`claude-independent-review`](skills/codex/claude-independent-review/) | Fait intervenir Claude comme reviewer indépendant en lecture seule, Codex gardant l'arbitrage | — | ✓ |
+| [`plan-delegate-verify`](skills/codex/plan-delegate-verify/) | Planifie des lots indépendants, les délègue à des sous-agents calibrés et vérifie chaque résultat sur preuves | — | ✓ |
 
 ## Installation
 
@@ -82,7 +83,8 @@ skills/
 │   ├── grill-me/
 │   └── std-dev-project/
 └── codex/      skills dépendant de fonctions propres à Codex
-    └── claude-independent-review/
+    ├── claude-independent-review/
+    └── plan-delegate-verify/
 ```
 
 Un répertoire `claude/` sera ajouté le jour où un skill dépendra de fonctions

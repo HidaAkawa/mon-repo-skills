@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan, Delegate, Verify"
+  short_description: "Cost-aware parallel work with adversarial QA"
+  default_prompt: "Use $plan-delegate-verify to plan, budget, delegate, and adversarially verify this task with cost-aware subagents."
