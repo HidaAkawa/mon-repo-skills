@@ -51,6 +51,8 @@ Spawn a fresh planning agent only when at least one condition holds:
 
 Use the strongest suitable model at `high` effort for that planner. Raise to `xhigh` only when the planning problem itself requires especially deep reasoning and a bad plan would make downstream rework materially more expensive. Use `fork_turns: "none"`, pass a self-contained brief, and review and own the proposed plan.
 
+Do not interrupt or rush a planning agent merely to reduce latency or begin execution sooner. Waiting for a substantive planning result is part of this phase, not avoidable orchestration overhead.
+
 ### Divide work into lots
 
 Create the fewest useful lots. Make each lot independently executable and independently verifiable. Merge lots that need to edit the same lines or make tightly coupled decisions; otherwise sequence them in dependency-ordered waves.
@@ -66,6 +68,18 @@ For every lot, record:
 7. **Risk** — standard or critical, with the reason for criticality.
 
 Prevent concurrent agents from editing overlapping files. Assign one owner, divide disjoint ranges or files, or serialize the dependent work. Preserve pre-existing user changes.
+
+### Enforce the planning exit gate
+
+Do not enter delegation until the orchestrator has reviewed the plan and all of these conditions hold:
+
+- every lot contains all seven required fields;
+- dependencies, execution waves, and write scopes are mutually consistent;
+- every done criterion is observable and sufficient to establish the lot's contribution to the complete task;
+- material planning uncertainties are resolved or explicitly disclosed as blockers;
+- the complete plan, routing, and agent-turn budget are ready to present to the user.
+
+If a planner appears to over-analyze after covering these conditions, ask for a structured synthesis against the exit gate. Identify any still-missing field or decision precisely. Do not ask the planner to conclude merely because planning is taking time, and do not treat the desire to start execution as evidence that the gate has passed.
 
 ### Set an agent-turn budget
 
@@ -120,6 +134,8 @@ Use `fork_turns: "none"` for executors so model and effort routing remains avail
 Do not leak the expected answer, hidden evaluation conclusions, or another executor’s reasoning into the prompt.
 
 ### Execute in waves
+
+Launch no executor until the planning exit gate has passed and the lot plan has been presented.
 
 Launch independent lots concurrently, up to the actual free-agent capacity. Account for the orchestrator in limits that include it. When lots exceed capacity, run dependency-aware waves and reuse freed slots.
 
