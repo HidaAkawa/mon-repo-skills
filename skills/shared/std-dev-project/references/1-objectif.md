@@ -30,6 +30,7 @@ sujets :
   - ce que le projet ne fera pas (frontière explicite)
   - ce qui existe déjà pour résoudre ce problème, et pourquoi ça ne suffit pas
   - l'échéance et le temps que l'utilisateur peut réellement y consacrer
+  - ce qui arriverait concrètement si le résultat était faux ou indisponible
 ```
 
 En `origine: archeologie`, ajouter :
@@ -53,9 +54,12 @@ la trouve prématurée.
 **Un objectif qui tient en une phrase est un bon objectif.** S'il en faut cinq,
 il y a probablement deux projets. Le dire.
 
+La question sur les conséquences prépare le classement de la phase 2. La poser
+en langage métier, sans parler de criticité, de SLO ou de niveau d'assurance.
+
 ## Document de sortie
 
-`docs/objectif-v1.md`, depuis [templates/objectif.md](../templates/objectif.md).
+`docs/objectif.md`, depuis [templates/objectif.md](../templates/objectif.md).
 
 Le relire à voix haute avec l'utilisateur avant validation. Un objectif qu'il ne
 peut pas reformuler lui-même n'est pas validé.
@@ -64,8 +68,9 @@ peut pas reformuler lui-même n'est pas validé.
 
 1. Validation explicite de l'utilisateur.
 2. Enrichir le `README.md` du projet avec l'objectif en quelques lignes.
-3. `etat.verrouille` += `"objectif"`, `phase` → 2.
-4. Commit : `docs(sdp): objectif macro v1`.
-5. Proposer le push, avec confirmation.
+3. Mettre `docs/index.md` à jour.
+4. `etat.verrouille` += `"objectif"`, `phase` → 2.
+5. Commit : `docs(sdp): objectif macro v1`.
+6. Proposer le push, avec confirmation.
 
 Puis [2-spec-non-fonctionnelle.md](2-spec-non-fonctionnelle.md).

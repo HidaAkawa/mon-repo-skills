@@ -1,64 +1,97 @@
-# <Projet> — Spécification non-fonctionnelle (v<N>)
+# <Projet> — Spécification non-fonctionnelle
 
-> Version <N> · <date absolue>
-> Pour une version > 1 : ne reprendre que ce qui change, et renvoyer à
-> `spec-nf-v<N-1>.md` pour le reste.
+> Statut : brouillon / approuvé
+> Version du projet : v<N>
+> Propriétaire : <personne ou équipe>
+> Dernière revue : <date absolue>
+> Niveau d'assurance : essentiel / renforce / critique
 
-Chaque décision porte **sa justification en une phrase**. Une décision sans
-raison écrite sera rouverte à chaque itération.
+## Classement
 
-## Déploiement
+| Axe | Décision | Motifs |
+|---|---|---|
+| Assurance | | |
+| Complexité | | |
+| Observabilité | local / distribue / operationnel | |
 
-| | Décision | Pourquoi |
+**Réévaluer si :** <changement de données, utilisateurs, réglementation,
+architecture ou conséquence d'une erreur>.
+
+## Déploiement et architecture
+
+| Sujet | Décision | Pourquoi |
 |---|---|---|
 | Où ça tourne | | |
 | Qui y accède | | |
+| Composants | | |
 | Coût mensuel estimé | | |
+
+> Pour un projet renforcé ou critique, renvoyer à `architecture.md` si cette
+> section ne suffit plus.
 
 ## Technique
 
-| | Décision | Pourquoi |
+| Sujet | Décision | Pourquoi |
 |---|---|---|
 | Langage | | |
 | Framework | | |
-| Base de données | | |
+| Stockage | | |
 | Framework de test | | |
 
 ## Données
 
-| | Décision | Pourquoi |
+| Sujet | Décision | Pourquoi |
 |---|---|---|
-| Nature des données | | |
-| Données personnelles | oui / non | |
-| Durée de conservation | | |
-| Sauvegardes | | |
+| Nature et propriétaire | | |
+| Données personnelles/sensibles | | |
+| Conservation | | |
+| Sauvegarde et restauration | | |
 
 ## Sécurité
 
-| | Décision | Pourquoi |
+| Sujet | Décision | Pourquoi |
 |---|---|---|
-| Authentification | | |
-| Gestion des secrets | | |
+| Authentification et autorisation | | |
+| Secrets | | |
 | Confidentialité des échanges | | |
+| Audit applicable | | |
 
-## Exigence en tests
+## Tests
 
-**Niveau : `leger` / `standard` / `strict`**
+**Profondeur :** essentiel / renforce / critique
 
-<Justification : argent manipulé, données personnelles, dépendance de tiers.>
+<Types de tests, erreurs et gates. Renvoyer à
+`qualite/strategie-tests.md` seulement si nécessaire.>
 
-Ce niveau est le **critère de sortie de la phase de développement**. La suite de
-tests doit passer intégralement.
+## Observabilité
 
-## Charge attendue
-
-<Nombre d'utilisateurs, volume de données, tolérance à l'indisponibilité.>
-
-## Décisions tranchées par l'agent
-
-> Décisions prises sans interroger l'utilisateur, car hors de portée de son
-> profil. Il peut les rouvrir à tout moment.
-
-| Décision | Raison |
+| Sujet | Décision |
 |---|---|
-| | |
+| Unité d'exécution tracée | |
+| Span racine et frontières enfant | |
+| Export | console / fichier / OTLP |
+| Niveau de logs | `APP_LOG_LEVEL` ou équivalent |
+| Défaut développement/test | `debug` |
+| Défaut production | `info` |
+| Sampling | |
+| Données interdites | |
+| Panne du backend | métier non bloqué |
+
+> `OTEL_LOG_LEVEL` ne règle que les diagnostics internes du SDK. Pour un projet
+> renforcé ou critique, renvoyer à `observabilite.md`.
+
+## Charge et disponibilité
+
+<Utilisateurs, volumes, performance et indisponibilité acceptable.>
+
+## Décisions prises par l'agent
+
+| Décision | Raison | Conséquence métier |
+|---|---|---|
+| | | |
+
+## Hypothèses ouvertes
+
+| ID | Décision provisoire | Raison | Impact | Confiance | Validation attendue |
+|---|---|---|---|---|---|
+| | | | | | |

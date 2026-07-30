@@ -1,50 +1,54 @@
-# <Projet> — Feedback (v<N>)
+# <Projet> — Feedback
 
-> Version <N> · <date absolue>
-> Recueilli après usage réel du produit, pas de mémoire.
+> Statut : brouillon / approuvé
+> Version testée : v<N>
+> Commit : <hash exact>
+> Environnement : <local/test/recette>
+> Dernière revue : <date absolue>
 
-## Le critère de réussite est-il atteint ?
+## Critère de réussite
 
-**Critère fixé dans l'objectif :** <le recopier>
+**Critère :** <reprendre l'objectif>
 
-**Verdict : atteint / partiellement / non**
+**Verdict :** atteint / partiellement atteint / non atteint
 
-<Sur quoi se fonde ce verdict.>
+<Preuves et limites.>
 
-## L'architecture a-t-elle tenu ?
+## Architecture et observabilité
 
-Le MVP servait de preuve de concept aux choix de la spécification
-non-fonctionnelle.
-
-| Choix | Tenu | Constat à l'usage |
+| Élément | Tenu | Constat |
 |---|:---:|---|
-| Hébergement | ✓ / ✗ | |
-| Base de données | ✓ / ✗ | |
-| Framework | ✓ / ✗ | |
+| Architecture | oui / non | |
+| Trace de bout en bout | oui / non | |
+| Corrélation logs-traces | oui / non | |
+| Diagnostic d'une panne | oui / non | |
+
+## Exercice de diagnostic
+
+| Étape | Preuve |
+|---|---|
+| Symptôme | |
+| `trace_id` | |
+| Span fautif | |
+| Logs corrélés | |
+| Cause | |
+| Action | |
+| Temps de diagnostic | |
 
 ## Retours
 
-Trois natures, trois suites différentes — ne pas les confondre.
-
-| # | Retour | Nature | Gravité |
+| ID | Retour | Nature | Gravité |
 |---|---|---|---|
-| R1 | | *écart à la spec* / *spec erronée* / *envie* | haute / moyenne / basse |
-
-- **Écart à la spec** — ça ne marche pas comme spécifié → correctif.
-- **Spec erronée** — ça marche comme spécifié, mais la spécification avait tort
-  → révision à l'itération suivante.
-- **Envie** — ça marche, il en veut plus → nouvelle fonctionnalité.
+| R-001 | | écart / spec erronée / besoin / observabilité | haute / moyenne / basse |
 
 ## Ce qui a fonctionné sans y penser
 
-<À noter aussi : c'est ce qu'il ne faudra pas casser.>
+- <…>
 
 ## Frictions mineures
 
-> Le signal le plus fiable. Tout « c'est pas grave mais » va ici.
-
 - <…>
 
-## Ce qui est là et ne sert à rien
+## Risques résiduels
 
-- <Candidat à la suppression. Retirer coûte moins cher que maintenir.>
+- <Risque, décision d'acceptation et responsable>

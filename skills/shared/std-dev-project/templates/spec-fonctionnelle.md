@@ -1,50 +1,54 @@
-# <Projet> — Spécification fonctionnelle (v<N>)
+# <Projet> — Spécification fonctionnelle
 
-> Version <N> · <date absolue>
-> Pour une version > 1 : ne reprendre que ce qui change, et renvoyer à
-> `spec-fonctionnelle-v<N-1>.md` pour le reste.
+> Statut : brouillon / approuvé
+> Version du projet : v<N>
+> Propriétaire : <personne ou équipe>
+> Dernière revue : <date absolue>
+> Niveau d'assurance : essentiel / renforce / critique
 
 ## Parcours principal
 
-<De bout en bout, du point de vue de l'utilisateur. Quelques lignes.>
+<De bout en bout, du point de vue de l'utilisateur.>
 
 ## Périmètre du MVP
 
-Le MVP est la **preuve de concept des deux spécifications** : il contient ce qui,
-s'il ne marchait pas, invaliderait la spécification non-fonctionnelle.
-
-| Fonctionnalité | Dans le MVP | Pourquoi |
+| Fonctionnalité | MVP | Pourquoi |
 |---|:---:|---|
-| | ✓ / ✗ | |
+| | oui / non | |
 
 ## Fonctionnalités
 
-### F1 — <intitulé>
+### F-001 — <Intitulé>
 
-<Description en une ou deux phrases, du point de vue de l'usage.>
+<Description orientée usage.>
 
 **Critères d'acceptation**
 
-- <Observable et vérifiable. Pas « ça marche bien ».>
+- <Observable et vérifiable.>
 
-**Ce qui peut mal se passer**
+**Modes de défaillance**
 
-- <Erreur, saisie invalide, absence de donnée → comportement attendu>
+- <Erreur ou absence → comportement attendu.>
 
-**Cas de test dérivés** *(profondeur selon le niveau d'exigence de la spec-nf)*
+**Cas de test**
 
-| # | Cas | Attendu |
+| ID | Cas | Attendu |
 |---|---|---|
-| T1.1 | nominal | |
-| T1.2 | <erreur> | |
+| T-F001-01 | nominal | |
+| T-F001-02 | erreur | |
 
-### F2 — <intitulé>
+**Diagnostic attendu**
 
-<…>
+| Élément | Décision |
+|---|---|
+| Opération/span stable | |
+| Spans enfants utiles | |
+| Événements/logs | |
+| Données interdites | |
 
 ## Rôles et droits
 
-> À supprimer si le produit n'a qu'un seul type d'utilisateur.
+> Supprimer si un seul rôle existe.
 
 | Rôle | Peut | Ne peut pas |
 |---|---|---|
@@ -52,6 +56,10 @@ s'il ne marchait pas, invaliderait la spécification non-fonctionnelle.
 
 ## Écarté du MVP
 
-> Part au backlog en phase 6.
+- <Fonctionnalité à transmettre au backlog>
 
-- <…>
+## Hypothèses ouvertes
+
+| ID | Décision provisoire | Impact | Validation attendue |
+|---|---|---|---|
+| | | | |

@@ -37,7 +37,9 @@ Lire, dans cet ordre, en s'arrêtant dès que le tableau est suffisant :
 3. arborescence sur deux niveaux ;
 4. modèles de données, schémas, migrations — ce qui révèle le domaine métier ;
 5. points d'entrée : routes, commandes, tâches planifiées, écrans principaux ;
-6. configuration de déploiement, intégration continue.
+6. configuration de déploiement, intégration continue ;
+7. instrumentation existante : configuration de logs, OpenTelemetry, métriques,
+   tracing, identifiants de corrélation.
 
 **Ne pas lire la logique métier ligne à ligne.** Sur un projet volumineux c'est
 irréalisable et sans valeur ici : on cherche le *quoi*, pas le *comment*.
@@ -56,7 +58,7 @@ signaler à l'utilisateur si le cas se présente.
 | Fichier | Contenu |
 |---|---|
 | `brouillon-objectif.md` | ce que le projet source semble chercher à faire |
-| `brouillon-spec-nf.md` | stack, hébergement, données, sécurité observés |
+| `brouillon-spec-nf.md` | stack, hébergement, données, sécurité et observabilité observés |
 | `brouillon-spec-fonctionnelle.md` | fonctionnalités identifiées, une ligne chacune |
 
 Dans chaque brouillon :

@@ -4,7 +4,16 @@
 une session `grill-me`.
 
 Objectif : connaître l'utilisateur, créer le terrain, et ne plus jamais avoir à
-redemander qui il est.
+redemander qui il est. **Ne pas classer la criticité ici** : la phase 1 apporte
+le contexte métier et la phase 2 effectue le classement.
+
+## Sommaire
+
+- [Établir le profil](#1-établir-le-profil)
+- [Situer le projet](#2-situer-le-projet)
+- [Créer le terrain](#3-créer-le-terrain)
+- [Créer le dépôt distant](#4-créer-le-dépôt-distant)
+- [Écrire l'état initial](#5-écrire-létat-initial)
 
 ## 1. Établir le profil
 
@@ -56,8 +65,9 @@ projet source ne sera jamais modifié.
    personnel, ni sur le bureau.
 3. **Git.** `git init` dans le nouveau répertoire.
 4. **Squelette** : `docs/`, `.sdp/`, un `.gitignore` adapté au type de projet,
-   un `README.md` minimal ne contenant que le nom du projet — il sera enrichi à
-   la phase 1.
+   un `README.md` minimal ne contenant que le nom du projet, et
+   `docs/index.md` depuis [templates/index.md](../templates/index.md). Ne créer
+   aucun autre dossier documentaire vide.
 
 ## 4. Créer le dépôt distant
 
@@ -91,6 +101,7 @@ Créer `.sdp/etat.json` :
 
 ```json
 {
+  "schema_version": 2,
   "version": "v1",
   "phase": 1,
   "phase_nom": "objectif",
@@ -98,6 +109,19 @@ Créer `.sdp/etat.json` :
   "profil": { "code": "…", "discipline_process": "…", "niveau_archi": "…" },
   "type_projet": "…",
   "origine": "neuf",
+  "assurance": { "niveau": null, "motifs": [], "reviser_si": [] },
+  "complexite": {
+    "multi_composants": null,
+    "asynchrone": null,
+    "api_exposee": null,
+    "donnees_persistantes": null
+  },
+  "observabilite": {
+    "niveau": null,
+    "unite_tracee": null,
+    "niveau_log_defaut": null
+  },
+  "hypotheses_ouvertes": [],
   "verrouille": [],
   "derogations": [],
   "dernier_commit": null,
@@ -106,6 +130,9 @@ Créer `.sdp/etat.json` :
 ```
 
 En `origine: archeologie`, mettre `phase: 0.5` et `phase_nom: "archeologie"`.
+
+Les valeurs nulles sont intentionnelles : ne pas demander de faits de criticité
+ou d'architecture avant que l'objectif soit connu.
 
 ## Sortie de phase
 
