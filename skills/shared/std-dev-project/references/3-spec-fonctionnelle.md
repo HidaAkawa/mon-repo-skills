@@ -5,80 +5,81 @@
 ## Ce que cette phase produit
 
 Ce que le produit fait, du point de vue de celui qui l'utilise. Chaque
-fonctionnalité assortie de **critères d'acceptation observables** — c'est d'eux
-que les tests de la phase 4 sont dérivés mécaniquement.
+fonctionnalité porte des critères d'acceptation observables, des modes d'erreur,
+des cas de test et les signaux nécessaires au diagnostic.
 
-Reprendre ici la liste des débordements notés en phase 1 : l'utilisateur avait
-déjà des idées de fonctionnalités, elles ont leur place maintenant.
+Reprendre les idées de fonctionnalités notées en phase 1.
 
 ## Cadrage à passer à `grill-me`
 
 ```
 sujets :
-  - le parcours principal, de bout en bout, du point de vue de l'utilisateur
-  - les fonctionnalités indispensables au MVP, et celles qui attendront
+  - parcours principal de bout en bout
+  - fonctionnalités indispensables au MVP et celles qui attendront
   - pour chacune : à quoi on voit qu'elle marche
-  - ce qui se passe quand ça se passe mal — erreurs, saisies invalides, absence
-  - qui a le droit de faire quoi, si plusieurs rôles existent
+  - comportement attendu en cas d'erreur, saisie invalide ou absence
+  - droits des rôles éventuels
 verrouille : objectif, spec-nf
 ```
 
-Rappeler que `objectif` et `spec-nf` sont verrouillés. Si l'utilisateur veut une
-fonctionnalité que l'architecture retenue ne permet pas, ne pas rouvrir la phase
-2 en douce : le dire, et poser le choix — renoncer à la fonctionnalité, ou
-ouvrir une itération pour changer l'architecture.
+Retirer les faits déjà établis. Ne jamais demander à l'utilisateur comment
+nommer les spans ou quels champs journaliser.
+
+Si une fonctionnalité contredit l'architecture, ne pas rouvrir la phase 2 en
+silence : renoncer à la fonctionnalité ou ouvrir une nouvelle itération.
 
 ## Découper le MVP
 
-Le premier MVP sert de **preuve de concept des deux spécifications** : il doit
-valider que l'architecture tient, pas seulement que le code marche. Le découpage
-suit donc une règle simple : **le MVP contient ce qui, s'il ne marchait pas,
-invaliderait la spécification non-fonctionnelle.**
+Le MVP est une preuve de concept des deux spécifications. Il contient en
+priorité le parcours qui traverse les couches et dépendances significatives.
 
-Concrètement, y faire figurer en priorité le parcours qui traverse le plus de
-couches — celui qui exerce à la fois l'interface, la logique et le stockage.
-
-Tout le reste part au backlog sans culpabilité. Un MVP qui fait trois choses
-complètement vaut mieux qu'un MVP qui en ébauche dix.
+Tout le reste part au backlog. Un MVP court mais complet vaut mieux qu'un
+périmètre large et incomplet.
 
 ## Critères d'acceptation
 
-Pour chaque fonctionnalité retenue, exiger une formulation observable :
+Exiger une formulation observable :
 
-- ❌ « la recherche fonctionne bien »
-- ✅ « en saisissant un nom partiel, la liste ne montre que les fiches dont le
-  nom contient cette chaîne, sans tenir compte des accents ni de la casse »
+- refusé : « la recherche fonctionne bien » ;
+- accepté : « un nom partiel ne montre que les fiches correspondantes, sans
+  tenir compte des accents ni de la casse ».
 
-Refuser les critères invérifiables. S'ils résistent, c'est en général que la
-fonctionnalité elle-même est mal définie — creuser là.
+## Dériver tests et signaux
 
-## Dériver les cas de test
+Pour chaque fonctionnalité, dériver :
 
-Aucune interrogation ici : la transformation est mécanique.
+1. un cas nominal ;
+2. les modes de défaillance exigés par le niveau d'assurance ;
+3. le nom stable de l'opération ou du span ;
+4. les spans enfants utiles au diagnostic ;
+5. les événements et erreurs à journaliser ;
+6. les données explicitement interdites dans logs et spans.
 
-Pour chaque fonctionnalité : critère d'acceptation → cas de test nominal, puis
-un cas par mode de défaillance identifié. La profondeur suit le niveau
-d'exigence fixé en phase 2 :
+Profondeur :
 
-| Niveau | Cas dérivés |
+| Assurance | Cas dérivés |
 |---|---|
-| `leger` | le nominal seulement |
-| `standard` | nominal, plus chaque cas d'erreur listé |
-| `strict` | ci-dessus, plus les cas limites et les tentatives d'accès non autorisé |
+| `essentiel` | nominal, erreurs essentielles, contrat d'observabilité |
+| `renforce` | ci-dessus, chaque erreur, accès et dépendance |
+| `critique` | ci-dessus, limites, sécurité, résilience et reprise |
 
-Les consigner dans la spécification, sous chaque fonctionnalité. Ils deviennent
-le contrat de la phase 4.
+Pour `essentiel`, conserver tout dans `docs/spec-fonctionnelle.md`. Pour
+`renforce`, lier la stratégie de tests. Pour `critique`, maintenir
+`docs/qualite/traceabilite.md` depuis
+[templates/traceabilite.md](../templates/traceabilite.md).
 
 ## Document de sortie
 
-`docs/spec-fonctionnelle-v1.md`, depuis
+`docs/spec-fonctionnelle.md`, depuis
 [templates/spec-fonctionnelle.md](../templates/spec-fonctionnelle.md).
 
 ## Sortie de phase
 
-1. Validation explicite.
-2. `etat.verrouille` += `"spec-fonctionnelle"`, `phase` → 4.
-3. Commit : `docs(sdp): spécification fonctionnelle v1`.
-4. Proposer le push.
+1. Validation explicite des comportements et erreurs par l'utilisateur.
+2. Vérifier que chaque parcours du MVP a tests et signaux diagnostiques.
+3. Mettre `docs/index.md` et la traçabilité applicable à jour.
+4. Ajouter `"spec-fonctionnelle"` à `etat.verrouille`, passer `phase` à 4.
+5. Commit : `docs(sdp): spécification fonctionnelle v<N>`.
+6. Proposer le push.
 
 Puis [4-developpement.md](4-developpement.md).

@@ -1,93 +1,131 @@
 # Phase 2 — Spécification non-fonctionnelle
 
-**Interrogation : oui.** C'est la phase la plus risquée pour un utilisateur peu
-technique : elle porte sur des sujets dont il ignore souvent jusqu'au vocabulaire.
-Appliquer le calibrage de `0-methode.md` avec rigueur.
+**Interrogation : oui.** Lire `0-assurance.md` et `0-observabilite.md`. C'est la
+phase la plus risquée pour un utilisateur peu technique : appliquer le
+calibrage de `0-methode.md` avec rigueur.
 
 ## Ce que cette phase produit
 
-Comment le projet sera construit, hébergé, sécurisé et éprouvé. Pas ce qu'il
-fait — cela reste pour la phase 3.
+Le niveau d'assurance, la complexité, puis la manière dont le projet sera
+construit, hébergé, sécurisé, éprouvé et diagnostiqué. Pas ce qu'il fait — cela
+reste pour la phase 3.
+
+## Sommaire
+
+- [Classer avant d'interroger](#classer-avant-dinterroger)
+- [Cadrage à passer à grill-me](#cadrage-à-passer-à-grill-me)
+- [Ce qui se tranche d'office](#ce-qui-se-tranche-doffice)
+- [Tests et observabilité](#tests-et-observabilité)
+- [Documents de sortie](#documents-de-sortie)
+
+## Classer avant d'interroger
+
+Lire objectif, projet et brouillons éventuels. Préremplir assurance et
+complexité avec les faits établis. Ne demander que les faits métier qui peuvent
+modifier le classement. Ne jamais demander à l'utilisateur de choisir entre
+`essentiel`, `renforce` et `critique`.
+
+Annoncer la proposition ainsi :
+
+> Je classe ce projet en `<niveau>` parce que `<conséquences concrètes>`. Cela
+> implique `<tests, preuves et exploitation en langage clair>`. Je prends les
+> choix techniques correspondants ; signale-moi seulement si un fait métier est
+> faux.
 
 ## Cadrage à passer à `grill-me`
 
 ```
 sujets :
-  - architecture de déploiement : où ça tourne, qui y accède, depuis où
-  - architecture technique : langage, framework, base de données
-  - données : lesquelles, à qui elles appartiennent, combien de temps gardées
-  - sécurité : authentification, données personnelles, secrets, sauvegardes
-  - niveau d'exigence en tests automatisés
-  - contraintes : budget mensuel, échéance, compétences disponibles
-  - ce qui doit tenir à la charge : nombre d'utilisateurs attendus
+  - qui accède au produit et depuis où
+  - quelles données concernent d'autres personnes et leur sensibilité
+  - conséquences financières, juridiques ou humaines d'une erreur
+  - durée d'indisponibilité acceptable
+  - budget mensuel et nombre d'utilisateurs attendus
 ```
+
+Retirer tout sujet déjà résolu. Pour un profil non technique, ne jamais ajouter
+framework, stockage, sampling, format de logs ou architecture de traces.
 
 ## Ce qui se tranche d'office
 
-Pour un profil `code: non`, et largement pour `assiste` : ne **pas** demander de
-choisir un framework, une base de données ou un fournisseur d'hébergement. Ces
-questions n'ont pas de réponse informée à ce niveau et produisent soit un
-blocage, soit un choix au hasard que l'utilisateur ne pourra pas défendre.
+À partir du classement et de la complexité, décider :
 
-Trancher à partir de `type_projet` et des contraintes, puis **annoncer et
-justifier en trois lignes**. L'utilisateur garde le droit d'objecter.
+- architecture technique et de déploiement ;
+- langage, framework, stockage et hébergement ;
+- framework et profondeur des tests ;
+- niveau d'observabilité ;
+- unité d'exécution tracée ;
+- exporteur, propagation et sampling ;
+- variable de logs de la stack ou `APP_LOG_LEVEL`.
 
-Ce qui reste toujours à l'utilisateur, quel que soit son profil, parce que ce
-sont des décisions métier déguisées en décisions techniques :
+Pour `code: non`, trancher tout cela. Pour `assiste`, recommander et expliquer
+brièvement. Pour `oui`, demander uniquement les arbitrages dont plusieurs
+réponses restent raisonnables.
 
-- **qui doit pouvoir accéder au produit** — public, sur invitation, lui seul ;
-- **quelles données personnelles sont manipulées** — il est le seul à le savoir,
-  et cela commande toute l'architecture de sécurité ;
-- **combien il peut dépenser par mois** ;
-- **ce qui arrive si le produit tombe une journée** — anodin, ou inacceptable ;
-- **le niveau d'exigence en tests**, voir ci-dessous.
+Chaque décision porte une raison et, si elle reste incertaine, une hypothèse
+`HYP-<NNN>`.
 
-## Le niveau d'exigence en tests
+## Tests et observabilité
 
-C'est une décision **métier**, pas technique. La poser à tous les profils, en ces
-termes :
+Déduire la profondeur des tests :
 
-> Trois questions rapides : ce projet manipule-t-il de l'argent ? Des données
-> personnelles d'autres gens ? Est-ce que quelqu'un d'autre que toi va en
-> dépendre ?
+- `essentiel` : parcours principal, erreurs essentielles et contrat
+  d'observabilité ;
+- `renforce` : logique métier, modes d'erreur, accès non autorisés et
+  dépendances ;
+- `critique` : cas limites, sécurité, résilience, reprise et preuves conservées.
 
-| Réponses | Niveau | Ce que ça implique |
-|---|---|---|
-| Aucun oui | `leger` | Tests sur les chemins principaux uniquement |
-| Un oui | `standard` | Tests sur toute la logique métier et les cas d'erreur |
-| Argent ou données personnelles | `strict` | Ci-dessus, plus les cas limites et les accès non autorisés |
+Le tracing de bout en bout est obligatoire dans les trois cas. Déterminer
+`observabilite.niveau` :
 
-Consigner le niveau dans la spécification : la phase 4 s'en sert comme critère
-de sortie, et c'est la seule gate du cycle qui soit vérifiable par machine.
+- `local` pour un processus simple ;
+- `distribue` pour plusieurs composants, de l'asynchrone ou un projet renforcé ;
+- `operationnel` pour un projet critique.
 
-Le framework de test, lui, découle de la stack. Le trancher sans demander.
+Définir l'unité d'exécution significative, les niveaux de logs et les variables
+OpenTelemetry selon `0-observabilite.md`.
 
 ## Points de vigilance
 
-**La sécurité se traite ici ou jamais.** La rattraper après coup coûte une
-réécriture. Même sur un prototype, poser la question des données personnelles :
-la réponse conditionne des obligations légales que l'utilisateur ignore
-probablement.
+**La sécurité se traite ici.** Même sur un prototype, vérifier les données
+personnelles et les conséquences d'un accès non autorisé.
 
 **Ne jamais accepter « on verra pour l'hébergement plus tard ».** Le lieu
-d'exécution contraint la stack ; le décider après revient à choisir la stack
-deux fois.
+d'exécution contraint la stack.
 
-**Traduire tout coût en euros par mois.** C'est la seule unité qu'un profil non
-technique peut arbitrer avec confiance.
+**Traduire tout coût en euros par mois** pour les profils non techniques.
 
-## Document de sortie
+**Ne pas surdocumenter.** Si architecture, observabilité ou stratégie de tests
+tiennent lisiblement dans `spec-nf.md`, ne pas créer un document autonome.
 
-`docs/spec-nf-v1.md`, depuis [templates/spec-nf.md](../templates/spec-nf.md).
+## Documents de sortie
 
-Chaque décision y figure avec **sa justification en une phrase**. Une décision
-sans raison écrite sera rouverte à chaque itération.
+Toujours : `docs/spec-nf.md`, depuis
+[templates/spec-nf.md](../templates/spec-nf.md).
+
+Selon `0-assurance.md` et seulement si utiles :
+
+- `docs/architecture.md` depuis
+  [templates/architecture.md](../templates/architecture.md) ;
+- `docs/observabilite.md` depuis
+  [templates/observabilite.md](../templates/observabilite.md) ;
+- `docs/qualite/strategie-tests.md` depuis
+  [templates/strategie-tests.md](../templates/strategie-tests.md) ;
+- ADR depuis [templates/adr.md](../templates/adr.md) ;
+- modèle de menace depuis
+  [templates/modele-menaces.md](../templates/modele-menaces.md) ;
+- runbooks depuis [templates/runbook.md](../templates/runbook.md).
+
+Chaque décision porte une justification en une phrase.
 
 ## Sortie de phase
 
-1. Validation explicite.
-2. `etat.verrouille` += `"spec-nf"`, `phase` → 3.
-3. Commit : `docs(sdp): spécification non-fonctionnelle v1`.
-4. Proposer le push.
+1. Faire valider les faits et conséquences métier par l'utilisateur.
+2. Relire techniquement le classement, l'architecture et l'observabilité.
+3. Renseigner `assurance`, `complexite`, `observabilite` et les hypothèses.
+4. Mettre `docs/index.md` à jour.
+5. Ajouter `"spec-nf"` à `etat.verrouille`, passer `phase` à 3.
+6. Commit : `docs(sdp): spécification non-fonctionnelle v<N>`.
+7. Proposer le push.
 
 Puis [3-spec-fonctionnelle.md](3-spec-fonctionnelle.md).

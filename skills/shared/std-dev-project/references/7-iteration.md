@@ -1,51 +1,44 @@
 # Phase 7 — Itération
 
-**Interrogation : non.** Cette phase ne fait qu'ouvrir la suivante.
+**Interrogation : non.** Lire `0-assurance.md`.
 
-## Ce qu'elle fait
+## Ce que cette phase fait
 
-Incrémenter la version, remettre le cycle à la phase 2, et transmettre à
-l'itération suivante ce qu'elle doit savoir.
+Figer les preuves de la version terminée, incrémenter la version, remettre le
+cycle à la phase 2 et transmettre seulement ce qui doit être rouvert.
 
 ## Procédure
 
-1. Incrémenter `etat.iteration`, passer `etat.version` à `v<N+1>`.
-2. `phase` → 2, `phase_nom` → `spec-nf`.
-3. **Vider `etat.verrouille`** : les décisions redeviennent ouvertes, c'est
-   précisément le sens d'une itération. Les documents `-vN` restent la référence
-   tant qu'un `-vN+1` ne les contredit pas.
-4. Rappeler les dérogations non soldées de `DETTE.md`.
-5. Commit : `chore(sdp): ouverture de l'itération v<N+1>`.
+1. Créer `docs/releases/v<N>.md` depuis
+   [templates/manifeste-release.md](../templates/manifeste-release.md).
+2. Référencer le commit exact du produit essayé, l'environnement, les tests,
+   les preuves d'observabilité, les documents canoniques et risques acceptés.
+3. Incrémenter `etat.iteration`, passer `etat.version` à `v<N+1>`.
+4. Passer `phase` à 2 et `phase_nom` à `spec-nf`.
+5. Retirer de `etat.verrouille` seulement les décisions touchées par les issues
+   retenues ; conserver les décisions stables.
+6. Rappeler dérogations non soldées et hypothèses ouvertes.
+7. Mettre `docs/index.md` à jour.
+8. Commit : `chore(sdp): release v<N> et ouverture v<N+1>`.
 
-## Ce qui est transmis à la phase 2
+## Ce qui est transmis
 
-Composer un résumé court, à passer en tête du cadrage de l'itération suivante :
+- portée mineure ou majeure ;
+- issues retenues ;
+- décisions fonctionnelles et architecturales affectées ;
+- exigences d'assurance, sécurité ou observabilité affectées ;
+- dérogations et hypothèses à solder.
 
-- la portée décidée en phase 6 — mineure ou majeure ;
-- les issues retenues pour cette version ;
-- les points d'architecture que le feedback a mis en doute ;
-- les dérogations à solder.
+## Ne pas recommencer
 
-## Le piège à éviter
+Pour une itération mineure, mettre à jour les seules sections touchées des
+documents canoniques. Demander une confirmation uniquement si un fait métier
+n'est pas déjà établi.
 
-Une itération ne recommence pas de zéro. Le `grill-me` de la phase 2 ne doit
-réinterroger **que ce qui change** :
+Pour une itération majeure, réinterroger uniquement les axes remis en cause et
+réévaluer le niveau d'assurance si les conséquences ont changé.
 
-- **itération mineure** : demander la confirmation que l'architecture reste
-  valable, en une question. Si oui, produire un `spec-nf-vN+1.md` de trois
-  lignes renvoyant à la version précédente, et passer à la phase 3.
-- **itération majeure** : interroger uniquement les axes que le feedback a
-  remis en cause. Ne pas rejouer les sujets stables.
-
-Refaire intégralement l'interrogation à chaque tour est le meilleur moyen de
-faire abandonner la méthode. Le signaler si l'utilisateur le demande lui-même :
-
-> On a déjà tranché l'hébergement et il n'a posé aucun problème. Je ne le
-> rouvre pas — dis-le moi si tu veux qu'on y revienne.
-
-## Documents de l'itération
-
-Rappel de `0-methode.md` : les documents `-vN+1` sont des **diffs ciblés**. Ne
-jamais recopier l'inchangé ; renvoyer à `-vN`.
+Git porte le diff et l'historique ; le manifeste de release porte la baseline
+approuvée. Ne jamais créer de document différentiel `-vN+1`.
 
 Puis [2-spec-non-fonctionnelle.md](2-spec-non-fonctionnelle.md).
