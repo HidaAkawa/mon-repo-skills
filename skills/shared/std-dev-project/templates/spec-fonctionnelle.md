@@ -4,7 +4,7 @@
 > Version du projet : v<N>
 > Propriétaire : <personne ou équipe>
 > Dernière revue : <date absolue>
-> Niveau d'assurance : essentiel / renforce / critique
+> Niveau de garantie requis : essentiel / renforce / critique
 
 ## Parcours principal
 

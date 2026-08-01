@@ -55,7 +55,8 @@ la trouve prématurée.
 il y a probablement deux projets. Le dire.
 
 La question sur les conséquences prépare le classement de la phase 2. La poser
-en langage métier, sans parler de criticité, de SLO ou de niveau d'assurance.
+en langage métier, sans parler de criticité, de SLO ou de niveau de garantie
+requis.
 
 ## Document de sortie
 

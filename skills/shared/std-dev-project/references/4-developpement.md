@@ -26,8 +26,8 @@ en jargon de code.
 
 ## Tests
 
-Écrire les cas dérivés en phase 3 au niveau d'assurance fixé en phase 2. Un test
-sans critère révèle une spécification à compléter.
+Écrire les cas dérivés en phase 3 au niveau de garantie requis fixé en phase 2.
+Un test sans critère révèle une spécification à compléter.
 
 Tester aussi le contrat d'observabilité :
 

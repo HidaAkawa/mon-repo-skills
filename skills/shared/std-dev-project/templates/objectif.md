@@ -24,7 +24,7 @@
 ## Conséquence d'un résultat faux ou indisponible
 
 <Conséquence concrète, en langage métier. La phase 2 s'en servira pour classer
-le niveau d'assurance.>
+le niveau de garantie requis.>
 
 ## Ce que le projet ne fera pas
 

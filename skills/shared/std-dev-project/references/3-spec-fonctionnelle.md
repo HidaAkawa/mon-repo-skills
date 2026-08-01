@@ -49,7 +49,7 @@ Exiger une formulation observable :
 Pour chaque fonctionnalité, dériver :
 
 1. un cas nominal ;
-2. les modes de défaillance exigés par le niveau d'assurance ;
+2. les modes de défaillance exigés par le niveau de garantie requis ;
 3. le nom stable de l'opération ou du span ;
 4. les spans enfants utiles au diagnostic ;
 5. les événements et erreurs à journaliser ;
@@ -57,7 +57,7 @@ Pour chaque fonctionnalité, dériver :
 
 Profondeur :
 
-| Assurance | Cas dérivés |
+| Niveau de garantie requis | Cas dérivés |
 |---|---|
 | `essentiel` | nominal, erreurs essentielles, contrat d'observabilité |
 | `renforce` | ci-dessus, chaque erreur, accès et dépendance |
