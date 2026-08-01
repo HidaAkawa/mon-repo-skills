@@ -1,14 +1,14 @@
 # Phase 2 — Spécification non-fonctionnelle
 
-**Interrogation : oui.** Lire `0-assurance.md` et `0-observabilite.md`. C'est la
+**Interrogation : oui.** Lire `0-garantie.md` et `0-observabilite.md`. C'est la
 phase la plus risquée pour un utilisateur peu technique : appliquer le
 calibrage de `0-methode.md` avec rigueur.
 
 ## Ce que cette phase produit
 
-Le niveau d'assurance, la complexité, puis la manière dont le projet sera
-construit, hébergé, sécurisé, éprouvé et diagnostiqué. Pas ce qu'il fait — cela
-reste pour la phase 3.
+Le niveau de garantie requis, la complexité, puis la manière dont le projet
+sera construit, hébergé, sécurisé, éprouvé et diagnostiqué. Pas ce qu'il fait
+— cela reste pour la phase 3.
 
 ## Sommaire
 
@@ -20,10 +20,10 @@ reste pour la phase 3.
 
 ## Classer avant d'interroger
 
-Lire objectif, projet et brouillons éventuels. Préremplir assurance et
-complexité avec les faits établis. Ne demander que les faits métier qui peuvent
-modifier le classement. Ne jamais demander à l'utilisateur de choisir entre
-`essentiel`, `renforce` et `critique`.
+Lire objectif, projet et brouillons éventuels. Préremplir le niveau de garantie
+requis et la complexité avec les faits établis. Ne demander que les faits
+métier qui peuvent modifier le classement. Ne jamais demander à l'utilisateur
+de choisir entre `essentiel`, `renforce` et `critique`.
 
 Annoncer la proposition ainsi :
 
@@ -103,7 +103,7 @@ tiennent lisiblement dans `spec-nf.md`, ne pas créer un document autonome.
 Toujours : `docs/spec-nf.md`, depuis
 [templates/spec-nf.md](../templates/spec-nf.md).
 
-Selon `0-assurance.md` et seulement si utiles :
+Selon `0-garantie.md` et seulement si utiles :
 
 - `docs/architecture.md` depuis
   [templates/architecture.md](../templates/architecture.md) ;
@@ -122,7 +122,8 @@ Chaque décision porte une justification en une phrase.
 
 1. Faire valider les faits et conséquences métier par l'utilisateur.
 2. Relire techniquement le classement, l'architecture et l'observabilité.
-3. Renseigner `assurance`, `complexite`, `observabilite` et les hypothèses.
+3. Renseigner `garantie_requise`, `complexite`, `observabilite` et les
+   hypothèses.
 4. Mettre `docs/index.md` à jour.
 5. Ajouter `"spec-nf"` à `etat.verrouille`, passer `phase` à 3.
 6. Commit : `docs(sdp): spécification non-fonctionnelle v<N>`.

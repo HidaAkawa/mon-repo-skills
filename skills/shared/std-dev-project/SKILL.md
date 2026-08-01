@@ -1,6 +1,6 @@
 ---
 name: std-dev-project
-description: Conduire un projet de développement de bout en bout selon un cycle imposé en sept étapes, avec interrogations adaptées au niveau de l'utilisateur, documentation proportionnée à la criticité, tests et observabilité OpenTelemetry de bout en bout. À utiliser pour démarrer, reconstruire ou reprendre un projet structuré, notamment lorsqu'un fichier .sdp/etat.json existe. Use when starting, rebuilding, or structuring a software project end to end.
+description: Conduire un projet de développement de bout en bout selon un cycle imposé en sept étapes, avec interrogations adaptées au niveau de l'utilisateur, niveau de garantie requis proportionné aux risques, documentation, tests et observabilité OpenTelemetry de bout en bout. À utiliser pour démarrer, reconstruire ou reprendre un projet structuré, notamment lorsqu'un fichier .sdp/etat.json existe. Use when starting, rebuilding, or structuring a software project end to end.
 ---
 
 # std-dev-project
@@ -19,7 +19,8 @@ Résoudre `<skill-dir>` comme le dossier absolu contenant ce `SKILL.md`.
 Ne jamais les confondre :
 
 - le **profil de l'utilisateur** règle le vocabulaire et ce qu'on lui demande ;
-- le **niveau d'assurance** règle les preuves et la profondeur documentaire ;
+- le **niveau de garantie requis** règle les preuves et la profondeur
+  documentaire ;
 - la **complexité technique** règle les artefacts spécialisés et le tracing.
 
 Un utilisateur débutant peut porter un produit critique : l'agent prend alors
@@ -29,17 +30,17 @@ les décisions techniques et les documente au lieu de réduire l'exigence.
 
 1. Chercher `.sdp/etat.json` à la racine du projet courant.
 2. **Absent** → le projet n'est pas encore sous méthode : aller en phase 0.
-3. **Présent sans `schema_version: 2`** → lire
-   [references/0-assurance.md](references/0-assurance.md), migrer sans
+3. **Présent sans `schema_version: 3`** → lire
+   [references/0-garantie.md](references/0-garantie.md), migrer sans
    recommencer le cycle, puis reprendre la phase en cours.
-4. **Présent en v2** → annoncer la phase, l'itération, le niveau d'assurance et
-   les éventuelles dérogations avant d'agir.
+4. **Présent en v3** → annoncer la phase, l'itération, le niveau de garantie
+   requis et les éventuelles dérogations avant d'agir.
 
 Toujours lire [references/0-methode.md](references/0-methode.md) avant d'agir :
 il porte les règles transverses. Charger ensuite **uniquement** :
 
 - le fichier de la phase courante ;
-- [references/0-assurance.md](references/0-assurance.md) pour une migration ou
+- [references/0-garantie.md](references/0-garantie.md) pour une migration ou
   les phases 2, 6 et 7 ;
 - [references/0-observabilite.md](references/0-observabilite.md) pour les
   phases 2 à 5 ou toute demande de diagnostic.
@@ -64,8 +65,8 @@ Ces règles ne souffrent aucune exception, quelle que soit la phase.
 
 - **L'ordre des phases est imposé.** Toute demande de saut déclenche la procédure
   de dérogation de `0-methode.md`. Ne jamais céder sans elle.
-- **Chaque phase laisse une preuve utile**, proportionnée au niveau d'assurance,
-  relue par la bonne partie prenante et commitée.
+- **Chaque phase laisse une preuve utile**, proportionnée au niveau de garantie
+  requis, relue par la bonne partie prenante et commitée.
 - **Ne jamais noyer l'utilisateur.** Chercher les faits, poser seulement les
   questions qui changent le produit, son risque ou son coût, et trancher le
   reste en explicitant les hypothèses.

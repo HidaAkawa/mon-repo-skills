@@ -12,7 +12,7 @@ propres à une plateforme.
 | Skill | Rôle | Claude | Codex |
 |---|---|:---:|:---:|
 | [`grill-me`](skills/shared/grill-me/) | Interroge sans relâche sur un plan ou une conception jusqu'à compréhension partagée | ✓ | ✓ |
-| [`std-dev-project`](skills/shared/std-dev-project/) | Livre un projet par un cycle imposé, avec documentation proportionnée et observabilité de bout en bout | ✓ | ✓ |
+| [`std-dev-project`](skills/shared/std-dev-project/) | Livre un projet par un cycle imposé, avec niveau de garantie requis, documentation proportionnée et observabilité de bout en bout | ✓ | ✓ |
 | [`claude-independent-review`](skills/codex/claude-independent-review/) | Fait intervenir Claude comme reviewer indépendant en lecture seule, Codex gardant l'arbitrage | — | ✓ |
 | [`plan-delegate-verify`](skills/codex/plan-delegate-verify/) | Planifie des lots indépendants, les délègue à des sous-agents calibrés et vérifie chaque résultat sur preuves | — | ✓ |
 | [`plan-delegate-verify`](skills/claude/plan-delegate-verify/) | Version native Claude Code du précédent : mêmes lots, délégation et vérification, portés sur l'outil Agent | ✓ | — |

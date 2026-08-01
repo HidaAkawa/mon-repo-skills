@@ -101,7 +101,7 @@ Créer `.sdp/etat.json` :
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "version": "v1",
   "phase": 1,
   "phase_nom": "objectif",
@@ -109,7 +109,7 @@ Créer `.sdp/etat.json` :
   "profil": { "code": "…", "discipline_process": "…", "niveau_archi": "…" },
   "type_projet": "…",
   "origine": "neuf",
-  "assurance": { "niveau": null, "motifs": [], "reviser_si": [] },
+  "garantie_requise": { "niveau": null, "motifs": [], "reviser_si": [] },
   "complexite": {
     "multi_composants": null,
     "asynchrone": null,

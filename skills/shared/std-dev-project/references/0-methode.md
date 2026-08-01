@@ -9,7 +9,7 @@
 - [Terminer une phase](#3-terminer-une-phase)
 - [Git](#4-git)
 - [Documents canoniques](#5-documents-canoniques)
-- [État v2](#6-état-v2)
+- [État v3](#6-état-v3)
 - [Neutralité de plateforme](#7-neutralité-de-plateforme)
 
 ## 1. Préparer l'interrogation
@@ -99,7 +99,7 @@ Ne jamais déclarer une release prête sans les gates suivantes :
 - niveau de log configurable sans modification du code ;
 - produit réellement essayé.
 
-Pour `assurance.niveau: critique`, sécurité, audit, intégrité, reprise et
+Pour `garantie_requise.niveau: critique`, sécurité, audit, intégrité, reprise et
 diagnostic des défaillances critiques sont également non dérogeables. Le
 développement expérimental peut continuer, mais la release reste non prête.
 
@@ -107,7 +107,7 @@ développement expérimental peut continuer, mais la release reste non prête.
 
 Une phase n'est terminée que si :
 
-1. sa preuve de sortie existe et satisfait le niveau d'assurance ;
+1. sa preuve de sortie existe et satisfait le niveau de garantie requis ;
 2. l'utilisateur a explicitement validé les faits et décisions métier ;
 3. l'agent a relu les décisions techniques et annoncé les hypothèses ouvertes ;
 4. `.sdp/etat.json` et `docs/index.md` sont à jour ;
@@ -145,7 +145,7 @@ manifeste `docs/releases/v<N>.md` qui référence le commit du produit validé e
 les preuves applicables.
 
 Créer les artefacts supplémentaires uniquement selon
-[0-assurance.md](0-assurance.md). Ne créer aucun dossier vide.
+[0-garantie.md](0-garantie.md). Ne créer aucun dossier vide.
 
 Chaque document indique au minimum :
 
@@ -155,13 +155,13 @@ Chaque document indique au minimum :
 - date de dernière revue ;
 - décisions, hypothèses et liens utiles.
 
-## 6. État v2
+## 6. État v3
 
 Versionner `.sdp/etat.json` avec le projet :
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "version": "v1",
   "phase": 3,
   "phase_nom": "spec-fonctionnelle",
@@ -173,7 +173,7 @@ Versionner `.sdp/etat.json` avec le projet :
   },
   "type_projet": "web",
   "origine": "neuf",
-  "assurance": {
+  "garantie_requise": {
     "niveau": "renforce",
     "motifs": ["application partagée"],
     "reviser_si": ["ajout de données sensibles"]
@@ -197,11 +197,12 @@ Versionner `.sdp/etat.json` avec le projet :
 }
 ```
 
-Le profil utilisateur reste définitif. Réévaluer assurance, complexité et
-observabilité seulement si le périmètre ou les conséquences changent.
+Le profil utilisateur reste définitif. Réévaluer le niveau de garantie requis,
+la complexité et l'observabilité seulement si le périmètre ou les conséquences
+changent.
 
-Pour un état sans `schema_version: 2`, suivre la migration de
-[0-assurance.md](0-assurance.md) sans ramener le projet à la phase 0.
+Pour un état sans `schema_version: 3`, suivre la migration de
+[0-garantie.md](0-garantie.md) sans ramener le projet à la phase 0.
 
 ## 7. Neutralité de plateforme
 

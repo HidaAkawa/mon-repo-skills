@@ -1,7 +1,7 @@
 # Phase 6 — Backlog
 
 **Interrogation : non.** Le tri est un arbitrage, pas une découverte. Lire
-`0-assurance.md`.
+`0-garantie.md`.
 
 ## Ce que cette phase produit
 
@@ -50,7 +50,8 @@ priorisées suffisent.
 Qualifier la portée :
 
 - **mineure** : périmètre et architecture stables, mise à jour ciblée ;
-- **majeure** : architecture, assurance, observabilité ou périmètre évoluent.
+- **majeure** : architecture, niveau de garantie requis, observabilité ou
+  périmètre évoluent.
 
 Renseigner `etat.portee_iteration_suivante` et lister précisément les décisions
 à rouvrir.

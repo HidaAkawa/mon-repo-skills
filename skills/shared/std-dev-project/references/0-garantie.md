@@ -1,4 +1,4 @@
-# Assurance, complexité et documentation proportionnée
+# Niveau de garantie requis, complexité et documentation proportionnée
 
 À lire pour migrer un état, classer le projet en phase 2, préparer le backlog ou
 ouvrir une itération.
@@ -6,7 +6,7 @@ ouvrir une itération.
 ## Sommaire
 
 - [Classer sans interroger techniquement](#classer-sans-interroger-techniquement)
-- [Niveaux d'assurance](#niveaux-dassurance)
+- [Niveaux de garantie requis](#niveaux-de-garantie-requis)
 - [Déclencheurs de complexité](#déclencheurs-de-complexité)
 - [Artefacts attendus](#artefacts-attendus)
 - [Migration d'un projet existant](#migration-dun-projet-existant)
@@ -15,7 +15,8 @@ ouvrir une itération.
 
 Déduire d'abord le niveau à partir de l'objectif, du code, des données et du
 contexte déjà connus. Ne demander que les faits métier manquants qui pourraient
-faire monter le niveau. Ne jamais demander « quel niveau d'assurance veux-tu ? ».
+faire monter le niveau. Ne jamais demander à l'utilisateur de choisir lui-même
+son niveau de garantie requis.
 
 Questions possibles, en langage courant :
 
@@ -27,7 +28,7 @@ Questions possibles, en langage courant :
 L'agent propose le classement, en donne les motifs et laisse l'utilisateur
 signaler un fait erroné. Le niveau le plus élevé déclenché l'emporte.
 
-## Niveaux d'assurance
+## Niveaux de garantie requis
 
 ### `essentiel`
 
@@ -119,18 +120,22 @@ premier fichier utile.
 
 ## Migration d'un projet existant
 
-Pour un état sans `schema_version: 2` :
+Pour un état sans `schema_version: 3` :
 
 1. ne pas changer `phase`, `iteration` ni `version` ;
 2. lire les documents, manifestes et configurations avant toute question ;
-3. remplir `assurance`, `complexite` et `observabilite` avec ce qui est établi ;
-4. demander uniquement les faits métier manquants qui peuvent changer une gate ;
-5. ajouter `schema_version: 2` et les `hypotheses_ouvertes` ;
-6. créer `docs/index.md` et y classer les anciens `*-vN.md` comme historiques ;
-7. créer ou mettre à jour un document canonique seulement quand sa phase est
+3. pour un état v2, renommer `assurance` en `garantie_requise` en conservant
+   exactement `niveau`, `motifs` et `reviser_si`, puis retirer `assurance` ;
+4. pour un état plus ancien, remplir `garantie_requise`, `complexite` et
+   `observabilite` avec ce qui est établi ;
+5. demander uniquement les faits métier manquants qui peuvent changer une gate ;
+6. ajouter `schema_version: 3` et les `hypotheses_ouvertes` si elles manquent ;
+7. créer `docs/index.md` s'il manque, sinon le mettre à jour, et y classer les
+   anciens `*-vN.md` comme historiques ;
+8. créer ou mettre à jour un document canonique seulement quand sa phase est
    touchée, sans déplacer ni réécrire les anciens fichiers ;
-8. produire un bilan d'écart ;
-9. reprendre directement la phase enregistrée, sans retour au début du cycle.
+9. produire un bilan d'écart ;
+10. reprendre directement la phase enregistrée, sans retour au début du cycle.
 
 Une lacune de sécurité, d'intégrité ou d'observabilité critique bloque la
 prochaine release. Une lacune documentaire secondaire entre dans `DETTE.md` et

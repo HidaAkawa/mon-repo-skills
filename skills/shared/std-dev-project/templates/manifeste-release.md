@@ -4,7 +4,7 @@
 > Date : <date absolue>
 > Commit du produit essayé : <hash exact>
 > Environnement de validation : <identifiant>
-> Niveau d'assurance : essentiel / renforce / critique
+> Niveau de garantie requis : essentiel / renforce / critique
 
 ## Résultat livré
 

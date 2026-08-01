@@ -4,8 +4,8 @@
 [`grill-me`](../grill-me/), `git`, et `gh` pour les écritures GitHub.
 
 Conduit un projet de développement selon un cycle en sept étapes imposées. Le
-skill adapte les questions au niveau de l'utilisateur, les preuves à la
-criticité du produit et les artefacts à sa complexité technique.
+skill adapte les questions au niveau de l'utilisateur, le niveau de garantie
+requis aux risques du produit et les artefacts à sa complexité technique.
 
 Le but reste de livrer un produit : la documentation n'existe que pour aider à
 construire, vérifier, diagnostiquer, exploiter ou faire évoluer.
@@ -14,10 +14,10 @@ construire, vérifier, diagnostiquer, exploiter ou faire évoluer.
 
 | # | Étape | Sortie principale |
 |---|---|---|
-| 0 | Calibration | profil, dépôt, état v2 |
+| 0 | Calibration | profil, dépôt, état v3 |
 | 0-bis | Archéologie | brouillons en lecture seule |
 | 1 | Objectif | `docs/objectif.md` |
-| 2 | Non-fonctionnel | assurance, architecture, tests, observabilité |
+| 2 | Non-fonctionnel | niveau de garantie requis, architecture, tests, observabilité |
 | 3 | Fonctionnel | comportements, tests et signaux diagnostiques |
 | 4 | Développement | produit, tests et trace réelle |
 | 5 | Tests et feedback | recette et exercice de troubleshooting |
@@ -27,7 +27,8 @@ construire, vérifier, diagnostiquer, exploiter ou faire évoluer.
 ## Trois axes indépendants
 
 - **Profil utilisateur** : règle vocabulaire et questions.
-- **Assurance** : `essentiel`, `renforce` ou `critique`, selon les conséquences.
+- **Niveau de garantie requis** : `essentiel`, `renforce` ou `critique`, selon
+  les conséquences d'une erreur.
 - **Complexité** : déclenche tracing distribué, contrats, modèles et diagrammes.
 
 Un utilisateur débutant n'abaisse jamais la qualité d'un projet critique :
@@ -65,7 +66,8 @@ Architecture, ADR, stratégie et rapport de tests, modèle de menace, traçabili
 et runbooks ne sont créés que lorsqu'ils apportent une preuve ou une aide
 opérationnelle réelle. Aucun dossier documentaire vide n'est créé.
 
-Les projets utilisant l'ancien schéma migrent sans recommencer le cycle. Leurs
+Les projets utilisant l'ancien schéma migrent sans recommencer le cycle. En v2,
+le champ `assurance` devient `garantie_requise` sans changer son contenu. Les
 documents `*-vN.md` restent historiques ; les documents canoniques apparaissent
 progressivement lorsque leur phase est touchée.
 

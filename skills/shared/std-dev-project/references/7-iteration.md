@@ -1,6 +1,6 @@
 # Phase 7 — Itération
 
-**Interrogation : non.** Lire `0-assurance.md`.
+**Interrogation : non.** Lire `0-garantie.md`.
 
 ## Ce que cette phase fait
 
@@ -26,7 +26,7 @@ cycle à la phase 2 et transmettre seulement ce qui doit être rouvert.
 - portée mineure ou majeure ;
 - issues retenues ;
 - décisions fonctionnelles et architecturales affectées ;
-- exigences d'assurance, sécurité ou observabilité affectées ;
+- niveau de garantie requis, sécurité ou observabilité affectés ;
 - dérogations et hypothèses à solder.
 
 ## Ne pas recommencer
@@ -36,7 +36,7 @@ documents canoniques. Demander une confirmation uniquement si un fait métier
 n'est pas déjà établi.
 
 Pour une itération majeure, réinterroger uniquement les axes remis en cause et
-réévaluer le niveau d'assurance si les conséquences ont changé.
+réévaluer le niveau de garantie requis si les conséquences ont changé.
 
 Git porte le diff et l'historique ; le manifeste de release porte la baseline
 approuvée. Ne jamais créer de document différentiel `-vN+1`.
