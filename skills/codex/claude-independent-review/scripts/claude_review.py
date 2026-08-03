@@ -22,6 +22,9 @@ import tempfile
 import textwrap
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Sequence
@@ -37,7 +40,55 @@ PROGRESS_HEARTBEAT_SECONDS = 15.0
 SECONDS_PER_MINUTE = 60.0
 ALLOWED_REVIEW_TYPES = {"code", "architecture", "security", "design", "content", "general"}
 ALLOWED_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
-MOVING_MODEL_ALIASES = {"sonnet", "opus", "haiku", "fable", "mythos"}
+MOVING_MODEL_ALIASES = {
+    "default",
+    "best",
+    "sonnet",
+    "opus",
+    "haiku",
+    "fable",
+    "mythos",
+    "opusplan",
+    "sonnet[1m]",
+    "opus[1m]",
+}
+MODEL_CATALOG_VERSION = "2026-08-03"
+MODEL_CATALOG = (
+    {
+        "id": "claude-sonnet-5",
+        "display_name": "Claude Sonnet 5",
+        "profile": "Équilibre capacité, rapidité et coût ; choix recommandé.",
+        "recommended": True,
+    },
+    {
+        "id": "claude-opus-5",
+        "display_name": "Claude Opus 5",
+        "profile": "Revue approfondie de code complexe, avec un coût et une latence supérieurs.",
+        "recommended": False,
+    },
+    {
+        "id": "claude-fable-5",
+        "display_name": "Claude Fable 5",
+        "profile": "Capacité maximale pour les revues longues, avec le coût et la latence les plus élevés.",
+        "recommended": False,
+    },
+    {
+        "id": "claude-haiku-4-5-20251001",
+        "display_name": "Claude Haiku 4.5",
+        "profile": "Rapidité et coût réduit, pour une revue moins exigeante.",
+        "recommended": False,
+    },
+    {
+        "id": "claude-opus-4-8",
+        "display_name": "Claude Opus 4.8",
+        "profile": "Génération précédente conservée pour les environnements qui la prennent encore en charge.",
+        "recommended": False,
+    },
+)
+MODEL_CATALOG_BY_ID = {item["id"]: item for item in MODEL_CATALOG}
+DEFAULT_MODELS_API_URL = "https://api.anthropic.com"
+MODELS_API_MAX_BYTES = 2 * 1024 * 1024
+MODELS_API_MAX_PAGES = 10
 SAFE_ENV_SUFFIXES = (".example", ".sample", ".template")
 HARD_SECRET_NAMES = {
     ".npmrc",
@@ -944,6 +995,123 @@ def compose_prompt(
     ).strip() + "\n"
 
 
+def _catalog_models() -> list[dict[str, Any]]:
+    return [dict(item) for item in MODEL_CATALOG]
+
+
+def _models_api_page(api_key: str, base_url: str, after_id: str | None, timeout_seconds: float) -> dict[str, Any]:
+    query = {"limit": 1000}
+    if after_id:
+        query["after_id"] = after_id
+    endpoint = base_url.rstrip("/") + "/v1/models?" + urllib.parse.urlencode(query)
+    request = urllib.request.Request(
+        endpoint,
+        headers={
+            "accept": "application/json",
+            "anthropic-version": "2023-06-01",
+            "x-api-key": api_key,
+            "user-agent": "claude-independent-review/model-discovery",
+        },
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        raw = response.read(MODELS_API_MAX_BYTES + 1)
+    if len(raw) > MODELS_API_MAX_BYTES:
+        raise ReviewError("La réponse de l'API Models dépasse la limite de 2 Mio")
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ReviewError("L'API Models a renvoyé un JSON invalide") from exc
+    if not isinstance(payload, dict):
+        raise ReviewError("L'API Models a renvoyé une racine JSON invalide")
+    return payload
+
+
+def _normalize_discovered_models(items: Any) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        raise ReviewError("L'API Models n'a pas renvoyé de liste de modèles")
+    models: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        model_id = item.get("id")
+        if not isinstance(model_id, str) or not model_id.strip():
+            continue
+        model_id = model_id.strip()
+        if model_id in seen or model_id.lower() in MOVING_MODEL_ALIASES:
+            continue
+        seen.add(model_id)
+        catalogued = MODEL_CATALOG_BY_ID.get(model_id)
+        display_name = item.get("display_name")
+        if not isinstance(display_name, str) or not display_name.strip():
+            display_name = catalogued["display_name"] if catalogued else model_id
+        created_at = item.get("created_at")
+        models.append(
+            {
+                "id": model_id,
+                "display_name": display_name.strip(),
+                "profile": (
+                    catalogued["profile"]
+                    if catalogued
+                    else "Modèle découvert par l'API Anthropic ; vérifier son profil avant de le retenir."
+                ),
+                "recommended": bool(catalogued and catalogued["recommended"]),
+                **({"created_at": created_at} if isinstance(created_at, str) and created_at else {}),
+            }
+        )
+    if not models:
+        raise ReviewError("L'API Models n'a renvoyé aucun identifiant de modèle exploitable")
+    return models
+
+
+def discover_models(*, allow_network: bool = True, timeout_seconds: float = 5.0) -> dict[str, Any]:
+    """Discover exact model IDs through the Anthropic Models API, with a versioned offline fallback."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    warnings: list[str] = []
+    if allow_network and api_key:
+        base_url = os.environ.get("ANTHROPIC_BASE_URL", DEFAULT_MODELS_API_URL).strip() or DEFAULT_MODELS_API_URL
+        try:
+            items: list[Any] = []
+            after_id: str | None = None
+            for _ in range(MODELS_API_MAX_PAGES):
+                page = _models_api_page(api_key, base_url, after_id, timeout_seconds)
+                data = page.get("data")
+                if not isinstance(data, list):
+                    raise ReviewError("L'API Models n'a pas renvoyé de champ data valide")
+                items.extend(data)
+                if not page.get("has_more"):
+                    break
+                last_id = page.get("last_id")
+                if not isinstance(last_id, str) or not last_id or last_id == after_id:
+                    raise ReviewError("La pagination de l'API Models est invalide")
+                after_id = last_id
+            else:
+                raise ReviewError("La pagination de l'API Models dépasse la limite de sécurité")
+            return {
+                "status": "discovered",
+                "source": "anthropic_models_api",
+                "catalog_version": MODEL_CATALOG_VERSION,
+                "models": _normalize_discovered_models(items),
+                "warnings": warnings,
+            }
+        except (ReviewError, OSError, ValueError, urllib.error.URLError) as exc:
+            warnings.append(
+                f"Découverte API indisponible ({type(exc).__name__}) ; catalogue embarqué utilisé."
+            )
+    elif not allow_network:
+        warnings.append("Découverte réseau désactivée ; catalogue embarqué utilisé.")
+    else:
+        warnings.append("ANTHROPIC_API_KEY absente ; catalogue embarqué utilisé.")
+    return {
+        "status": "fallback",
+        "source": "embedded_catalog",
+        "catalog_version": MODEL_CATALOG_VERSION,
+        "models": _catalog_models(),
+        "warnings": warnings,
+    }
+
+
 def doctor(claude_command: str) -> dict[str, str]:
     resolved = shutil.which(claude_command)
     if not resolved:
@@ -1450,6 +1618,16 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser = subparsers.add_parser("doctor", help="Vérifier Claude Code et ses verrous")
     doctor_parser.add_argument("--claude", default="claude")
 
+    discover_parser = subparsers.add_parser(
+        "discover-models", help="Découvrir les identifiants exacts des modèles disponibles"
+    )
+    discover_parser.add_argument(
+        "--offline", action="store_true", help="Utiliser uniquement le catalogue embarqué versionné"
+    )
+    discover_parser.add_argument(
+        "--timeout-seconds", type=float, default=5.0, help="Délai maximal de la découverte API"
+    )
+
     validate_parser = subparsers.add_parser("validate-config", help="Valider la politique d'un projet")
     validate_parser.add_argument("--project", required=True)
 
@@ -1493,6 +1671,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         with _translated_interrupts():
             if arguments.command == "doctor":
                 result: Any = {"status": "ready", **doctor(arguments.claude)}
+            elif arguments.command == "discover-models":
+                if not 0 < arguments.timeout_seconds <= 30:
+                    raise ReviewError("--timeout-seconds doit être supérieur à 0 et inférieur ou égal à 30")
+                result = discover_models(
+                    allow_network=not arguments.offline,
+                    timeout_seconds=arguments.timeout_seconds,
+                )
             elif arguments.command == "validate-config":
                 project_root = Path(arguments.project).resolve()
                 _, policy = load_policy(project_root)

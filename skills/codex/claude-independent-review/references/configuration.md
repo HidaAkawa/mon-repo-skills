@@ -26,17 +26,24 @@ Après désactivation, les audits restent des artefacts autonomes du projet. Une
 
 Pour un projet sans politique, faire choisir une seule fois un modèle avant de proposer le reste de la configuration. Enregistrer l'identifiant exact choisi dans `claude.model`. Ne pas reposer la question lors des revues suivantes.
 
-Catalogue versionné :
+Avant le choix, exécuter `python3 <skill-dir>/scripts/claude_review.py discover-models`. La commande interroge `GET /v1/models` lorsque `ANTHROPIC_API_KEY` est déjà disponible, sans jamais inclure la clé dans sa sortie. Elle suit la pagination et renvoie les identifiants exacts accessibles par cette API. Sans clé, hors ligne ou en cas d'échec réseau, elle revient automatiquement au catalogue embarqué et l'indique dans `source`, `status` et `warnings`.
+
+Une authentification Claude Code par abonnement ne fournit pas nécessairement `ANTHROPIC_API_KEY`. Dans ce cas, le repli embarqué est normal : l'utilisateur peut toujours saisir un identifiant exact visible dans son sélecteur `/model`. Utiliser `--offline` pour interdire toute découverte réseau.
+
+Catalogue embarqué versionné au 2026-08-03 :
 
 | Choix | Identifiant exact | Profil |
 |---:|---|---|
 | 1 | `claude-sonnet-5` | Équilibre capacité, rapidité et coût ; choix recommandé. |
-| 2 | `claude-opus-4-8` | Revue plus approfondie, avec un coût et une latence supérieurs. |
+| 2 | `claude-opus-5` | Revue approfondie de code complexe, avec un coût et une latence supérieurs. |
 | 3 | `claude-fable-5` | Capacité maximale, avec le coût et la latence les plus élevés. |
 | 4 | `claude-haiku-4-5-20251001` | Rapidité et coût réduit, pour une revue moins exigeante. |
-| 5 | Identifiant fourni par l'utilisateur | Accepter un autre identifiant exact pris en charge par son environnement. |
+| 5 | `claude-opus-4-8` | Génération précédente, pour les environnements qui la prennent encore en charge. |
+| 6 | Identifiant fourni par l'utilisateur | Accepter un autre identifiant exact pris en charge par son environnement. |
 
-Ne pas transformer un choix en alias `sonnet`, `opus`, `fable`, `haiku` ou `mythos` : ces alias peuvent changer de cible. Pour une politique existante, traiter un changement de modèle comme toute autre modification sensible : présenter la différence, obtenir l'accord, puis exécuter `install-policy --replace`.
+Lorsque la découverte API réussit, sa liste est prioritaire sur le catalogue embarqué car elle reflète les modèles accessibles avec la clé présente. Elle ne garantit pas les droits d'un autre fournisseur ou d'un abonnement Claude Code distinct ; conserver la saisie libre et faire confirmer le choix par l'utilisateur.
+
+Ne pas transformer un choix en alias mouvant comme `default`, `best`, `sonnet`, `opus`, `fable`, `haiku`, `mythos`, `opusplan`, `sonnet[1m]` ou `opus[1m]` : ces valeurs peuvent changer de cible. Pour une politique existante, traiter un changement de modèle comme toute autre modification sensible : présenter la différence, obtenir l'accord, puis exécuter `install-policy --replace`.
 
 ## Schéma version 1
 

@@ -23,10 +23,13 @@ du design ou du contenu.
 
 ## Choix du modèle
 
-À la première configuration, le skill **demande le modèle de façon bloquante**,
-avant toute autre question. Il propose Sonnet 5, Opus 4.8, Fable 5, Haiku 4.5 ou
-la saisie d'un identifiant exact. `claude-sonnet-5` est recommandé mais **n'est
-jamais retenu sans réponse**.
+À la première configuration, le skill découvre d'abord les modèles via l'API
+Models d'Anthropic lorsqu'une `ANTHROPIC_API_KEY` est déjà disponible, puis il
+**demande le modèle de façon bloquante**, avant toute autre question. Sans clé
+API ou en cas d'échec réseau, il utilise un catalogue embarqué daté proposant
+Sonnet 5, Opus 5, Fable 5, Haiku 4.5, Opus 4.8 ou la saisie d'un identifiant
+exact. `claude-sonnet-5` est recommandé mais **n'est jamais retenu sans
+réponse**. La clé API n'est jamais affichée ni enregistrée par le runner.
 
 Le choix est ensuite réutilisé sans être redemandé. Pour en changer, passer par
 le remplacement explicite de politique : le skill ne modifie jamais
@@ -112,6 +115,14 @@ python3 --version
 claude --version
 claude auth status --text
 ```
+
+La découverte des modèles peut être vérifiée séparément :
+
+```text
+python3 <skill-dir>/scripts/claude_review.py discover-models
+```
+
+Ajouter `--offline` pour utiliser uniquement le catalogue embarqué.
 
 Sous Windows, `py -3 --version` peut remplacer `python3 --version`.
 

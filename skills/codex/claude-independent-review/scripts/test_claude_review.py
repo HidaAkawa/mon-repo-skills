@@ -123,7 +123,19 @@ class ConfigurationTests(unittest.TestCase):
     def test_validates_version_one_and_rejects_aliases(self):
         parsed = review.validate_policy(policy_data())
         self.assertEqual(parsed.model, "claude-sonnet-5")
-        for alias in ("sonnet", "opus", "haiku", "fable", "mythos", "FABLE"):
+        for alias in (
+            "default",
+            "best",
+            "sonnet",
+            "opus",
+            "haiku",
+            "fable",
+            "mythos",
+            "opusplan",
+            "sonnet[1m]",
+            "opus[1m]",
+            "FABLE",
+        ):
             with self.subTest(alias=alias):
                 invalid = policy_data()
                 invalid["claude"]["model"] = alias
@@ -294,6 +306,64 @@ class ConfigurationTests(unittest.TestCase):
                 review.install_policy(root, proposal, replace=False)
             self.assertEqual(list(Path(outside_name).iterdir()), [])
             proposal.unlink()
+
+
+class ModelDiscoveryTests(unittest.TestCase):
+    def test_embedded_catalog_contains_opus_five_without_api_key(self):
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
+            result = review.discover_models()
+
+        self.assertEqual(result["status"], "fallback")
+        self.assertEqual(result["source"], "embedded_catalog")
+        self.assertIn("claude-opus-5", {model["id"] for model in result["models"]})
+        self.assertEqual(
+            [model["id"] for model in result["models"] if model["recommended"]],
+            ["claude-sonnet-5"],
+        )
+
+    def test_models_api_discovers_exact_ids_without_exposing_key(self):
+        payload = {
+            "data": [
+                {"type": "model", "id": "claude-opus-5", "display_name": "Claude Opus 5"},
+                {"type": "model", "id": "claude-custom-20260801", "display_name": "Custom"},
+            ],
+            "has_more": False,
+            "first_id": "claude-opus-5",
+            "last_id": "claude-custom-20260801",
+        }
+        response = io.BytesIO(json.dumps(payload).encode("utf-8"))
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "fixture-secret"}), mock.patch.object(
+            review.urllib.request, "urlopen", return_value=response
+        ) as urlopen:
+            result = review.discover_models()
+
+        self.assertEqual(result["status"], "discovered")
+        self.assertEqual(result["source"], "anthropic_models_api")
+        self.assertEqual([model["id"] for model in result["models"]], ["claude-opus-5", "claude-custom-20260801"])
+        self.assertNotIn("fixture-secret", json.dumps(result))
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.get_header("X-api-key"), "fixture-secret")
+
+    def test_models_api_failure_falls_back_without_exposing_error_details(self):
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "fixture-secret"}), mock.patch.object(
+            review.urllib.request,
+            "urlopen",
+            side_effect=review.urllib.error.URLError("fixture-secret must stay hidden"),
+        ):
+            result = review.discover_models()
+
+        self.assertEqual(result["source"], "embedded_catalog")
+        self.assertNotIn("fixture-secret", json.dumps(result))
+
+    def test_discover_models_cli_can_force_offline_catalog(self):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            return_code = review.main(["discover-models", "--offline"])
+
+        self.assertEqual(return_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["source"], "embedded_catalog")
+        self.assertIn("claude-opus-5", {model["id"] for model in payload["models"]})
 
 
 class SnapshotTests(unittest.TestCase):
