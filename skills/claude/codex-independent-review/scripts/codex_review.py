@@ -1358,7 +1358,17 @@ def doctor(codex_command: str) -> dict[str, str]:
     executable = resolve_codex(codex_command)
     base = Path.cwd()
     version = _run([executable, "--version"], base).stdout.decode("utf-8", errors="replace").strip()
-    auth = _run([executable, "login", "status"], base, check=False).stdout.decode("utf-8", errors="replace").strip()
+    # `codex login status` reports on stderr, not stdout; read both so the
+    # diagnostic stays useful whichever stream a future release picks.
+    login = _run([executable, "login", "status"], base, check=False)
+    auth = " ".join(
+        part
+        for part in (
+            login.stdout.decode("utf-8", errors="replace").strip(),
+            login.stderr.decode("utf-8", errors="replace").strip(),
+        )
+        if part
+    )
     help_text = _run([executable, "exec", "--help"], base).stdout.decode("utf-8", errors="replace")
     missing = sorted(flag for flag in REQUIRED_HELP_FLAGS if flag not in help_text)
     if missing:

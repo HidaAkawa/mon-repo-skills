@@ -230,3 +230,15 @@ python3 skills/claude/codex-independent-review/scripts/test_codex_review.py
 Ils utilisent un faux exécutable `codex` : **aucune requête n'est envoyée à
 OpenAI et aucun quota n'est consommé.** En contrepartie, ils vérifient que la
 bonne ligne de commande est construite, pas que Codex y répond comme prévu.
+
+`doctor`, lui, s'exécute sans coût contre le vrai CLI et couvre ce que la
+simulation ne peut pas : résolution de l'exécutable, présence effective des
+verrous dans `codex exec --help`, statut de connexion. Le lancer avant la
+première revue d'un poste :
+
+```bash
+python3 <skill-dir>/scripts/codex_review.py doctor
+```
+
+Le chemin de revue lui-même n'a pas été exercé contre le service : un premier
+usage réel reste le seul moyen de le confirmer.

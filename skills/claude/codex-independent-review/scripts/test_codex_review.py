@@ -95,7 +95,8 @@ if log:
 if args == ['--version']:
     print('codex-cli 9.9.9 (fixture)')
 elif args == ['login', 'status']:
-    print('Logged in: fixture')
+    # The real Codex CLI reports login status on stderr, not stdout.
+    print('Logged in using fixture', file=sys.stderr)
 elif args[:2] == ['exec', '--help']:
     flags = ['--sandbox', '--ephemeral', '--ignore-user-config', '--ignore-rules',
              '--strict-config', '--skip-git-repo-check', '--output-last-message',
@@ -592,6 +593,13 @@ class ReviewExecutionTests(unittest.TestCase):
             self.assertEqual(status, 0, error)
             report = Path(json.loads(output)["report"]).read_text(encoding="utf-8")
             self.assertIn('"unparsed_events":1', report.replace(" ", ""))
+
+    def test_doctor_reports_login_status_written_on_stderr(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            fake = make_fake_codex(Path(container_name))
+            diagnostic = review.doctor(str(fake))
+        self.assertIn("Logged in using fixture", diagnostic["auth"])
+        self.assertIn("codex-cli 9.9.9", diagnostic["version"])
 
     def test_doctor_rejects_a_cli_missing_a_required_lock(self):
         with tempfile.TemporaryDirectory() as container_name:
