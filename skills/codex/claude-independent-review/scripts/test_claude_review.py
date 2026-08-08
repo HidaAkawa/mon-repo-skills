@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import concurrent.futures
 import importlib.util
 import io
 import json
@@ -11,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -51,14 +53,46 @@ def policy_data(**overrides):
     return data
 
 
+def sdp_state_data(*, level="standard", maximum=2, used=0, version="v1", milestone="lot-ready"):
+    return {
+        "schema_version": 4,
+        "project": {"name": "Fixture", "origin": "new", "archetype": "api"},
+        "stage": {"id": "verify", "status": "in-progress", "iteration": 1},
+        "profile": {"development": "guided", "operations": "guided", "assurance": "guided"},
+        "guarantee": {"level": level, "reasons": [], "review_if": []},
+        "baseline": {"id": f"BL-API-{level.upper()}-v1", "catalog_version": "1.0", "overrides": []},
+        "assumptions": [],
+        "risks": [],
+        "derogations": [],
+        "reviews": {
+            "mode": "claude",
+            "authorization": {"source": "std-dev-project-v4", "version": version, "granted": True},
+            "counter_reviews": {"maximum": maximum, "used": used},
+            "milestones": [{"id": milestone, "status": "open"}],
+            "reports": [],
+        },
+        "delivery": {
+            "working_version": version,
+            "candidate_version": None,
+            "forge": "none",
+            "branch": None,
+            "change_request_url": None,
+            "ci_status": "local-green",
+        },
+        "documents": {},
+        "last_commit": None,
+        "updated_at": "2026-08-08",
+    }
+
+
 def write_json(path: Path, value) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def make_fake_claude(directory: Path) -> Path:
-    executable = directory / "fake-claude"
-    executable.write_text(
+    script = directory / "fake-claude.py"
+    script.write_text(
         """#!/usr/bin/env python3
 import json, os, sys, time
 args = sys.argv[1:]
@@ -75,6 +109,10 @@ elif args == ['--help']:
     print('--safe-mode --tools --permission-mode --strict-mcp-config --disable-slash-commands --no-chrome --no-session-persistence --output-format' + suffix + ' --verbose --model --effort --append-system-prompt')
 else:
     prompt = sys.stdin.read()
+    count = os.environ.get('FAKE_CLAUDE_COUNT')
+    if count:
+        with open(count, 'a', encoding='utf-8') as stream:
+            stream.write('1\\n')
     mode = os.environ.get('FAKE_CLAUDE_MODE', 'success')
     delay = float(os.environ.get('FAKE_CLAUDE_DELAY', '0'))
     if delay:
@@ -101,6 +139,15 @@ else:
 """,
         encoding="utf-8",
     )
+    if os.name == "nt":
+        executable = directory / "fake-claude.cmd"
+        executable.write_text(
+            f'@"{sys.executable}" "{script}" %*\r\n',
+            encoding="utf-8",
+        )
+    else:
+        executable = directory / "fake-claude"
+        executable.write_text(script.read_text(encoding="utf-8"), encoding="utf-8")
     executable.chmod(0o755)
     return executable
 
@@ -175,7 +222,17 @@ class ConfigurationTests(unittest.TestCase):
             second = (root / "AGENTS.md").read_text(encoding="utf-8")
             self.assertEqual(second.count(review.AGENTS_START), 1)
             self.assertIn("Keep me.", second)
+            self.assertEqual(
+                (root / ".gitignore").read_text(encoding="utf-8").splitlines().count(review.REVIEW_IGNORE_RULE),
+                1,
+            )
             proposal.unlink()
+
+    def test_gitignore_rendering_is_idempotent(self):
+        first = review.render_gitignore("dist/\n")
+        second = review.render_gitignore(first)
+        self.assertEqual(first, second)
+        self.assertEqual(first, "dist/\n/docs/reviews/\n")
 
     def test_rejects_partial_agents_marker_before_writing(self):
         with tempfile.TemporaryDirectory() as root_name:
@@ -220,6 +277,7 @@ class ConfigurationTests(unittest.TestCase):
             self.assertIn("Keep this content.", agents)
             self.assertNotIn(review.AGENTS_START, agents)
             self.assertNotIn(review.AGENTS_END, agents)
+            self.assertIn(review.REVIEW_IGNORE_RULE, (root / ".gitignore").read_text(encoding="utf-8"))
             audit_after = {
                 path.relative_to(root).as_posix(): path.read_bytes()
                 for path in (report, manifest, resolution)
@@ -301,10 +359,70 @@ class ConfigurationTests(unittest.TestCase):
             root = Path(root_name)
             proposal = root.parent / f"{root.name}-proposal.json"
             write_json(proposal, policy_data())
-            (root / ".codex").symlink_to(Path(outside_name), target_is_directory=True)
+            try:
+                (root / ".codex").symlink_to(Path(outside_name), target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"liens symboliques indisponibles : {exc}")
             with self.assertRaisesRegex(review.ReviewError, "sortirait"):
                 review.install_policy(root, proposal, replace=False)
             self.assertEqual(list(Path(outside_name).iterdir()), [])
+            proposal.unlink()
+
+    @unittest.skipUnless(shutil.which("git"), "git absent")
+    def test_install_warns_without_untracking_existing_reviews(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            proposal = root.parent / f"{root.name}-proposal.json"
+            write_json(proposal, policy_data())
+            report = root / "docs/reviews/existing.md"
+            report.parent.mkdir(parents=True)
+            report.write_text("tracked\n", encoding="utf-8")
+            subprocess.run(["git", "add", "docs/reviews/existing.md"], cwd=root, check=True)
+
+            result = review.install_policy(root, proposal, replace=False)
+
+            self.assertTrue(result["warnings"])
+            tracked = subprocess.run(
+                ["git", "ls-files", "--", "docs/reviews/existing.md"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            self.assertEqual(tracked, "docs/reviews/existing.md")
+            proposal.unlink()
+
+    @unittest.skipUnless(shutil.which("git"), "git absent")
+    def test_custom_report_directory_is_also_ignored_and_warned(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            data = policy_data()
+            data["reports"]["directory"] = "audit/reviews"
+            proposal = root.parent / f"{root.name}-proposal.json"
+            write_json(proposal, data)
+            report = root / "audit/reviews/existing.md"
+            report.parent.mkdir(parents=True)
+            report.write_text("tracked\n", encoding="utf-8")
+            subprocess.run(["git", "add", "audit/reviews/existing.md"], cwd=root, check=True)
+
+            result = review.install_policy(root, proposal, replace=False)
+
+            rules = (root / ".gitignore").read_text(encoding="utf-8").splitlines()
+            self.assertIn("/docs/reviews/", rules)
+            self.assertIn("/audit/reviews/", rules)
+            self.assertIn("audit/reviews/existing.md", result["warnings"][0])
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "ls-files", "--", "audit/reviews/existing.md"],
+                    cwd=root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip(),
+                "audit/reviews/existing.md",
+            )
             proposal.unlink()
 
 
@@ -366,6 +484,69 @@ class ModelDiscoveryTests(unittest.TestCase):
         self.assertIn("claude-opus-5", {model["id"] for model in payload["models"]})
 
 
+class StdDevAuthorizationTests(unittest.TestCase):
+    def test_budget_is_exactly_bound_to_guarantee_and_consumed_atomically(self):
+        for level, maximum in (("standard", 2), ("elevated", 3), ("critical", 4)):
+            with self.subTest(level=level), tempfile.TemporaryDirectory() as root_name:
+                root = Path(root_name)
+                state_path = root / review.SDP_STATE_RELATIVE
+                write_json(state_path, sdp_state_data(level=level, maximum=maximum))
+
+                result = review.validate_sdp_authorization(root, ["lot-ready"], consume=True)
+
+                self.assertEqual(result["maximum"], maximum)
+                self.assertEqual(result["used"], 1)
+                self.assertEqual(json.loads(state_path.read_text(encoding="utf-8"))["reviews"]["counter_reviews"]["used"], 1)
+
+    def test_rejects_wrong_version_budget_milestone_and_exhaustion(self):
+        fixtures = []
+        wrong_version = sdp_state_data()
+        wrong_version["reviews"]["authorization"]["version"] = "v0"
+        fixtures.append((wrong_version, "version de travail"))
+        fixtures.append((sdp_state_data(maximum=3), "niveau de garantie"))
+        fixtures.append((sdp_state_data(used=2), "épuisé"))
+        fixtures.append((sdp_state_data(milestone="design-review"), "Jalon absent"))
+        external_mode = sdp_state_data()
+        external_mode["reviews"]["mode"] = "external-prompt"
+        fixtures.append((external_mode, "n'active pas"))
+        for state, message in fixtures:
+            with self.subTest(message=message), tempfile.TemporaryDirectory() as root_name:
+                root = Path(root_name)
+                write_json(root / review.SDP_STATE_RELATIVE, state)
+                with self.assertRaisesRegex(review.ReviewError, message):
+                    review.validate_sdp_authorization(root, ["lot-ready"], consume=True)
+                self.assertEqual(
+                    json.loads((root / review.SDP_STATE_RELATIVE).read_text(encoding="utf-8"))["reviews"]["counter_reviews"]["used"],
+                    state["reviews"]["counter_reviews"]["used"],
+                )
+
+    def test_concurrent_consumption_is_serialized(self):
+        with tempfile.TemporaryDirectory() as root_name:
+            root = Path(root_name)
+            state_path = root / review.SDP_STATE_RELATIVE
+            write_json(state_path, sdp_state_data(level="critical", maximum=4))
+            real_atomic_write = review._atomic_write
+
+            def delayed_atomic_write(*args, **kwargs):
+                time.sleep(0.05)
+                return real_atomic_write(*args, **kwargs)
+
+            with mock.patch.object(review, "_atomic_write", side_effect=delayed_atomic_write):
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    results = list(
+                        executor.map(
+                            lambda _: review.validate_sdp_authorization(root, ["lot-ready"], consume=True),
+                            range(2),
+                        )
+                    )
+
+            self.assertEqual({result["used"] for result in results}, {1, 2})
+            self.assertEqual(
+                json.loads(state_path.read_text(encoding="utf-8"))["reviews"]["counter_reviews"]["used"],
+                2,
+            )
+
+
 class SnapshotTests(unittest.TestCase):
     def _installed_project(self, root: Path):
         proposal = root.parent / f"{root.name}-proposal.json"
@@ -386,8 +567,13 @@ class SnapshotTests(unittest.TestCase):
             (root / "docs/reviews/old.md").write_text("old\n", encoding="utf-8")
             outside = root.parent / f"{root.name}-outside.txt"
             outside.write_text("outside\n", encoding="utf-8")
+            symlink_created = False
             try:
-                (root / "outside-link").symlink_to(outside)
+                try:
+                    (root / "outside-link").symlink_to(outside)
+                    symlink_created = True
+                except OSError:
+                    pass
                 snapshot = review.build_snapshot(root, policy, Path(temporary_name), [], None, [], [])
             finally:
                 outside.unlink(missing_ok=True)
@@ -396,8 +582,9 @@ class SnapshotTests(unittest.TestCase):
             self.assertIn(".env.example", copied)
             self.assertNotIn(".env", copied)
             self.assertNotIn("docs/reviews/old.md", copied)
-            self.assertEqual(copied["outside-link"]["status"], "external_symlink")
-            self.assertFalse((snapshot.root / "outside-link").exists())
+            if symlink_created:
+                self.assertEqual(copied["outside-link"]["status"], "external_symlink")
+                self.assertFalse((snapshot.root / "outside-link").exists())
 
     def test_threshold_stops_before_copying(self):
         with tempfile.TemporaryDirectory() as root_name, tempfile.TemporaryDirectory() as temporary_name:
@@ -412,6 +599,78 @@ class SnapshotTests(unittest.TestCase):
             (root / "two.txt").write_text("2", encoding="utf-8")
             with self.assertRaises(review.ScopeTooLarge):
                 review.build_snapshot(root, review.load_policy(root)[1], Path(temporary_name), [], None, [], [])
+
+    def test_custom_report_policy_still_excludes_default_and_custom_directories_without_git(self):
+        with tempfile.TemporaryDirectory() as root_name, tempfile.TemporaryDirectory() as temporary_name:
+            root = Path(root_name)
+            data = policy_data()
+            data["reports"]["directory"] = "audit/reviews"
+            proposal = root.parent / f"{root.name}-proposal.json"
+            write_json(proposal, data)
+            review.install_policy(root, proposal, replace=False)
+            proposal.unlink()
+            (root / "src").mkdir()
+            (root / "src/app.py").write_text("print('ok')\n", encoding="utf-8")
+            for relative in ("docs/reviews/old-sensitive.md", "audit/reviews/old-sensitive.md"):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("sensitive audit\n", encoding="utf-8")
+
+            snapshot = review.build_snapshot(
+                root,
+                review.load_policy(root)[1],
+                Path(temporary_name),
+                [],
+                None,
+                [],
+                [],
+            )
+
+            copied = {entry["path"] for entry in snapshot.manifest["files"]}
+            self.assertIn("src/app.py", copied)
+            self.assertNotIn("docs/reviews/old-sensitive.md", copied)
+            self.assertNotIn("audit/reviews/old-sensitive.md", copied)
+
+    @unittest.skipUnless(shutil.which("git"), "git absent")
+    def test_custom_report_policy_excludes_tracked_default_reviews_in_git_mode(self):
+        with tempfile.TemporaryDirectory() as root_name, tempfile.TemporaryDirectory() as temporary_name:
+            root = Path(root_name)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "fixture@example.test"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
+            data = policy_data()
+            data["reports"]["directory"] = "audit/reviews"
+            proposal = root.parent / f"{root.name}-proposal.json"
+            write_json(proposal, data)
+            review.install_policy(root, proposal, replace=False)
+            proposal.unlink()
+            (root / "src").mkdir()
+            (root / "src/app.py").write_text("print('ok')\n", encoding="utf-8")
+            for relative in ("docs/reviews/old-sensitive.md", "audit/reviews/old-sensitive.md"):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("sensitive audit\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(
+                ["git", "add", "-f", "docs/reviews/old-sensitive.md", "audit/reviews/old-sensitive.md"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=root, check=True)
+
+            snapshot = review.build_snapshot(
+                root,
+                review.load_policy(root)[1],
+                Path(temporary_name),
+                [],
+                "HEAD",
+                [],
+                [],
+            )
+
+            copied = {entry["path"] for entry in snapshot.manifest["files"]}
+            self.assertNotIn("docs/reviews/old-sensitive.md", copied)
+            self.assertNotIn("audit/reviews/old-sensitive.md", copied)
 
     @unittest.skipUnless(shutil.which("git"), "git absent")
     def test_git_snapshot_keeps_filtered_tracked_and_untracked_diff(self):
@@ -598,6 +857,7 @@ class ReviewExecutionTests(unittest.TestCase):
             self.assertIn("interrompue", error)
             self.assertFalse((root / "docs/reviews").exists())
 
+    @unittest.skipIf(os.name == "nt", "os.kill ne respecte pas les gestionnaires Python sous Windows")
     def test_termination_signals_become_controlled_interruptions(self):
         for signum in (getattr(review.signal, "SIGTERM", None), getattr(review.signal, "SIGHUP", None)):
             if signum is None:
@@ -624,6 +884,110 @@ class ReviewExecutionTests(unittest.TestCase):
             self.assertNotEqual(status, 0)
             self.assertIn("audit-context", error)
             self.assertFalse((root / "docs/reviews").exists())
+
+    def test_standalone_counter_review_requires_explicit_confirmation_flag(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            container = Path(container_name)
+            root, fake = self._project_and_fake(container)
+            audit = root / "previous-review.md"
+            audit.write_text("# Previous review\n", encoding="utf-8")
+
+            status, _, error = self._invoke(root, fake, ["--kind", "counter", "--audit-context", str(audit)])
+            self.assertNotEqual(status, 0)
+            self.assertIn("confirm-counter-review", error)
+
+            status, output, error = self._invoke(
+                root,
+                fake,
+                ["--kind", "counter", "--audit-context", str(audit), "--confirm-counter-review"],
+            )
+            self.assertEqual(status, 0, error)
+            self.assertEqual(json.loads(output)["status"], "created")
+
+    def test_sdp_authorized_counter_review_consumes_bound_budget(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            container = Path(container_name)
+            root, fake = self._project_and_fake(container)
+            audit = root / "previous-review.md"
+            audit.write_text("# Previous review\n", encoding="utf-8")
+            state_path = root / review.SDP_STATE_RELATIVE
+            write_json(state_path, sdp_state_data())
+
+            status, output, error = self._invoke(
+                root,
+                fake,
+                ["--kind", "counter", "--audit-context", str(audit), "--sdp-authorized"],
+            )
+
+            self.assertEqual(status, 0, error)
+            self.assertEqual(json.loads(output)["authorization"]["source"], "std-dev-project-v4")
+            self.assertEqual(json.loads(state_path.read_text(encoding="utf-8"))["reviews"]["counter_reviews"]["used"], 1)
+
+    def test_failed_sdp_counter_review_does_not_consume_budget(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            container = Path(container_name)
+            root, fake = self._project_and_fake(container)
+            audit = root / "previous-review.md"
+            audit.write_text("# Previous review\n", encoding="utf-8")
+            state_path = root / review.SDP_STATE_RELATIVE
+            write_json(state_path, sdp_state_data())
+
+            with temporary_environment(FAKE_CLAUDE_MODE="failure"):
+                status, _, _ = self._invoke(
+                    root,
+                    fake,
+                    ["--kind", "counter", "--audit-context", str(audit), "--sdp-authorized"],
+                )
+
+            self.assertNotEqual(status, 0)
+            self.assertEqual(json.loads(state_path.read_text(encoding="utf-8"))["reviews"]["counter_reviews"]["used"], 0)
+
+    def test_sdp_session_lock_prevents_concurrent_reviewer_invocation(self):
+        with tempfile.TemporaryDirectory() as container_name:
+            container = Path(container_name)
+            root, fake = self._project_and_fake(container)
+            audit = root / "previous-review.md"
+            audit.write_text("# Previous review\n", encoding="utf-8")
+            write_json(root / review.SDP_STATE_RELATIVE, sdp_state_data())
+            count = container / "invocations.log"
+
+            def run_review(_):
+                arguments = review.build_parser().parse_args(
+                    [
+                        "review",
+                        "--project",
+                        str(root),
+                        "--mission",
+                        "Concurrent bounded review.",
+                        "--milestone",
+                        "lot-ready",
+                        "--kind",
+                        "counter",
+                        "--audit-context",
+                        str(audit),
+                        "--sdp-authorized",
+                        "--claude",
+                        str(fake),
+                    ]
+                )
+                try:
+                    return review.command_review(arguments, MODULE_PATH.parents[1])["status"]
+                except review.ReviewError as exc:
+                    return str(exc)
+
+            with temporary_environment(FAKE_CLAUDE_COUNT=count, FAKE_CLAUDE_DELAY=0.2), mock.patch.object(
+                review, "STATE_LOCK_TIMEOUT_SECONDS", 0.05
+            ):
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    results = list(executor.map(run_review, range(2)))
+
+            self.assertEqual(results.count("created"), 1)
+            self.assertTrue(any("Verrou de budget" in result for result in results))
+            self.assertEqual(count.read_text(encoding="utf-8").splitlines(), ["1"])
+            self.assertEqual(
+                json.loads((root / review.SDP_STATE_RELATIVE).read_text(encoding="utf-8"))["reviews"]["counter_reviews"]["used"],
+                1,
+            )
 
 
 @unittest.skipUnless(os.environ.get("RUN_LIVE_CLAUDE") == "1", "live Claude smoke test disabled")

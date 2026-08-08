@@ -1,82 +1,62 @@
 ---
 name: std-dev-project
-description: Conduire un projet de développement de bout en bout selon un cycle imposé en sept étapes, avec interrogations adaptées au niveau de l'utilisateur, niveau de garantie requis proportionné aux risques, documentation, tests et observabilité OpenTelemetry de bout en bout. À utiliser pour démarrer, reconstruire ou reprendre un projet structuré, notamment lorsqu'un fichier .sdp/etat.json existe. Use when starting, rebuilding, or structuring a software project end to end.
+description: Conduire, reconstruire ou reprendre un projet logiciel de bout en bout selon un cycle v4 en cinq étapes, avec cadrage adaptatif via grill-me, baselines automatiques de sécurité, qualité, performance et observabilité, preuves proportionnées au risque, revues indépendantes bornées, CI et livraison par PR/MR. À utiliser lorsqu'un projet doit être structuré ou lorsqu'un état .sdp/state.json ou .sdp/etat.json existe. Use when starting, rebuilding, migrating, or running a software project end to end.
 ---
 
 # std-dev-project
 
-Conduire un projet selon un cycle en sept étapes dont **l'ordre est imposé**.
-Livrer un produit utilisable reste le but : ne produire un écrit que s'il aide
-à construire, vérifier, diagnostiquer, exploiter ou faire évoluer le produit.
+Livrer un produit utilisable selon cinq étapes ordonnées. Chercher les faits,
+appliquer une baseline complète, puis demander uniquement les décisions métier
+qui changent le produit, le risque, le coût ou le délai.
 
-Ce skill s'exécute indifféremment sur plusieurs agents. Ne jamais nommer un
-modèle ni un produit dans les échanges avec l'utilisateur : dire « l'agent ».
-
-Résoudre `<skill-dir>` comme le dossier absolu contenant ce `SKILL.md`.
-
-## Les trois axes
-
-Ne jamais les confondre :
-
-- le **profil de l'utilisateur** règle le vocabulaire et ce qu'on lui demande ;
-- le **niveau de garantie requis** règle les preuves et la profondeur
-  documentaire ;
-- la **complexité technique** règle les artefacts spécialisés et le tracing.
-
-Un utilisateur débutant peut porter un produit critique : l'agent prend alors
-les décisions techniques et les documente au lieu de réduire l'exigence.
+Résoudre `<skill-dir>` comme le dossier absolu contenant ce fichier. Dire
+« l'agent » dans les échanges et rester neutre vis-à-vis de la plateforme.
 
 ## Se situer
 
-1. Chercher `.sdp/etat.json` à la racine du projet courant.
-2. **Absent** → le projet n'est pas encore sous méthode : aller en phase 0.
-3. **Présent sans `schema_version: 3`** → lire
-   [references/0-garantie.md](references/0-garantie.md), migrer sans
-   recommencer le cycle, puis reprendre la phase en cours.
-4. **Présent en v3** → annoncer la phase, l'itération, le niveau de garantie
-   requis et les éventuelles dérogations avant d'agir.
+1. Chercher `.sdp/state.json` à la racine du projet.
+2. S'il existe avec `schema_version: 4`, lire
+   [references/workflow.md](references/workflow.md) et reprendre `stage.id`.
+3. Si `.sdp/etat.json` existe, ou si `state.json` n'est pas en v4, lire
+   [references/migration-v4.md](references/migration-v4.md) avant toute écriture.
+4. En l'absence d'état, commencer à `initiate-and-frame`.
 
-Toujours lire [references/0-methode.md](references/0-methode.md) avant d'agir :
-il porte les règles transverses. Charger ensuite **uniquement** :
+Charger ensuite uniquement les ressources utiles :
 
-- le fichier de la phase courante ;
-- [references/0-garantie.md](references/0-garantie.md) pour une migration ou
-  les phases 2, 6 et 7 ;
-- [references/0-observabilite.md](references/0-observabilite.md) pour les
-  phases 2 à 5 ou toute demande de diagnostic.
+- [references/baselines.md](references/baselines.md) pendant `define`, lors
+  d'un changement de risque ou pour vérifier une gate ;
+- [references/independent-reviews.md](references/independent-reviews.md) aux
+  jalons de conception et de vérification ;
+- [references/standards-profile.md](references/standards-profile.md) pour créer
+  ou contrôler les documents, jamais pour inventer une certification.
 
-## Routage des phases
+## Axes indépendants
 
-| Phase | Fichier à charger |
-|---|---|
-| 0 — Calibration et amorçage | [references/0-calibration.md](references/0-calibration.md) |
-| 0-bis — Archéologie *(projet existant)* | [references/0bis-archeologie.md](references/0bis-archeologie.md) |
-| 1 — Objectif macro | [references/1-objectif.md](references/1-objectif.md) |
-| 2 — Spécification non-fonctionnelle | [references/2-spec-non-fonctionnelle.md](references/2-spec-non-fonctionnelle.md) |
-| 3 — Spécification fonctionnelle | [references/3-spec-fonctionnelle.md](references/3-spec-fonctionnelle.md) |
-| 4 — Développement | [references/4-developpement.md](references/4-developpement.md) |
-| 5 — Tests et feedback | [references/5-tests-feedback.md](references/5-tests-feedback.md) |
-| 6 — Backlog | [references/6-backlog.md](references/6-backlog.md) |
-| 7 — Itération | [references/7-iteration.md](references/7-iteration.md) |
+- `profile` règle le vocabulaire, le nombre de questions et l'autonomie laissée
+  à l'utilisateur ;
+- `guarantee` règle les contrôles, preuves et revues ;
+- `project.archetype` règle les valeurs techniques de départ.
+
+Ne jamais réduire la sécurité ou la qualité parce que l'utilisateur est guidé.
+Décider davantage pour lui et expliquer les conséquences en langage clair.
 
 ## Invariants
 
-Ces règles ne souffrent aucune exception, quelle que soit la phase.
-
-- **L'ordre des phases est imposé.** Toute demande de saut déclenche la procédure
-  de dérogation de `0-methode.md`. Ne jamais céder sans elle.
-- **Chaque phase laisse une preuve utile**, proportionnée au niveau de garantie
-  requis, relue par la bonne partie prenante et commitée.
-- **Ne jamais noyer l'utilisateur.** Chercher les faits, poser seulement les
-  questions qui changent le produit, son risque ou son coût, et trancher le
-  reste en explicitant les hypothèses.
-- **Le tracing de bout en bout est obligatoire.** Sa profondeur et son
-  infrastructure restent proportionnées à la complexité et à la criticité.
-- **Ne jamais pousser sans confirmation explicite** de l'utilisateur, à chaque
-  fois. Committer localement est en revanche automatique.
-- **Ne jamais interroger nu.** Toute phase marquée « interrogation » invoque le
-  skill `grill-me` avec un bloc de cadrage construit selon `0-methode.md`.
-- **Ne jamais poser une question hors de portée de l'utilisateur.** La trancher,
-   l'annoncer comme tranchée, et expliquer pourquoi en langage clair.
-- **Ne jamais écrire dans un projet préexistant** ouvert comme source
-  documentaire. Il est en lecture seule, sans exception.
+- Respecter l'ordre des cinq étapes, mais les enchaîner sans pause artificielle.
+- Invoquer `grill-me` avec le cadrage de `workflow.md` pour toute interrogation
+  produit ; ne jamais poser une question technique à un profil `guided`.
+- Appliquer les baselines automatiquement. Une valeur plus faible exige une
+  dérogation ; une valeur plus forte est une adaptation normale.
+- Traiter « je ne sais pas » comme une hypothèse `ASM-###` et avancer avec la
+  valeur prudente. Bloquer seulement une livraison dont le risque reste
+  potentiellement critique ou illicite.
+- Maintenir les six documents canoniques et ne créer une annexe que si son
+  contenu ne reste pas lisible dans le document principal.
+- Conserver les rapports bruts sous `docs/reviews/`, ajouter
+  `/docs/reviews/` au `.gitignore` et ne jamais désindexer un rapport suivi sans
+  confirmation.
+- Committer localement à chaque gate. Ne pousser que pendant
+  `release-and-improve`, après confirmation explicite.
+- Mettre à jour la même PR/MR tant qu'elle reste ouverte. Ne jamais fusionner à
+  la place de l'utilisateur.
+- Ne jamais écrire dans un projet source utilisé pour une reconstruction.

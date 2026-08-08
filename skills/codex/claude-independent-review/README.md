@@ -19,7 +19,9 @@ du design ou du contenu.
 4. La réponse originale de Claude est conservée dans un rapport immuable.
 5. Codex vérifie chaque constat, applique les corrections autorisées et consigne
    ses décisions dans une résolution séparée.
-6. Toute contre-revue doit être confirmée explicitement.
+6. Toute contre-revue autonome doit être confirmée explicitement ; une
+   préautorisation `std-dev-project` v4 est acceptée seulement pour sa version,
+   son jalon et son budget `2 / 3 / 4`.
 
 ## Choix du modèle
 
@@ -50,7 +52,9 @@ silencieusement le modèle, l'effort, les jalons ou les sources de vérité.
   supprimés.
 - Seuls les éléments utiles à l'audit restent dans le projet : politique,
   pointeur `AGENTS.md`, rapport réussi, résolution éventuelle, manifeste
-  d'empreintes et diff Git filtré éventuel.
+  d'empreintes et diff Git filtré éventuel. Le runner ajoute
+  `/docs/reviews/` et tout `reports.directory` distinct au `.gitignore`, sans
+  désindexer les audits déjà suivis.
 - Le skill ne committe, ne pousse et ne publie jamais les artefacts d'un projet
   sans demande distincte.
 
@@ -71,7 +75,8 @@ python3 <skill-dir>/scripts/claude_review.py disable-policy --project <racine>
 **Tous les rapports, résolutions et dossiers de preuves restent en place.** La
 commande est idempotente, refuse un bloc `AGENTS.md` incomplet ou dupliqué, et
 restaure l'état initial si une opération échoue. Supprimer les audits eux-mêmes
-est une action distincte, qui exige une autorisation explicite.
+est une action distincte, qui exige une autorisation explicite. La règle
+`/docs/reviews/` reste elle aussi dans `.gitignore`.
 
 Une réactivation ultérieure suit le parcours d'initialisation et ne remplace
 jamais les audits conservés.
@@ -163,7 +168,8 @@ seule fois : langue, effort, sources de vérité, exclusions, seuils et jalons.
 ajoutera :
 
 - `.codex/claude-review.json`, la politique versionnable du projet ;
-- un petit bloc délimité dans le `AGENTS.md` racine.
+- un petit bloc délimité dans le `AGENTS.md` racine ;
+- la règle `/docs/reviews/` dans `.gitignore`.
 
 Pour une revue ponctuelle :
 
@@ -171,12 +177,15 @@ Pour une revue ponctuelle :
 Utilise $claude-independent-review pour faire une revue sécurité de ce projet.
 ```
 
-Une demande explicite autorise la revue initiale. Une contre-revue des
-corrections demande toujours une nouvelle confirmation.
+Une demande explicite autorise la revue initiale. Une contre-revue autonome des
+corrections demande toujours une nouvelle confirmation et le runner exige
+`--confirm-counter-review`. Lors d'un appel par `std-dev-project`, l'option
+`--sdp-authorized` fait valider et consommer la préautorisation bornée de
+`.sdp/state.json` v4.
 
-Les politiques et rapports créés dans les projets ne résident pas dans ce dépôt
-de skills : ils restent dans leurs projets respectifs et peuvent y être
-versionnés pour conserver la trace des décisions.
+Les politiques créées dans les projets ne résident pas dans ce dépôt de skills.
+Les rapports restent dans leurs projets sous `docs/reviews/`, hors Git ; les
+documents canoniques peuvent conserver leurs IDs, décisions et empreintes.
 
 ## Contenu
 
