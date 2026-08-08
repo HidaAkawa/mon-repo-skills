@@ -1,13 +1,18 @@
 # `std-dev-project`
 
-**Compatibilité : Claude Code et Codex.** Prérequis : le skill
-[`grill-me`](../grill-me/) et Git. Une CLI de forge est utile seulement si le
-projet doit être publié.
+**Compatibilité : Claude Code uniquement.** Prérequis : le skill
+[`grill-me`](../../shared/grill-me/) et Git. Une CLI de forge est utile
+seulement si le projet doit être publié.
 
 Le skill conduit un projet logiciel jusqu'à une version vérifiée et publiable.
 Il calibre ses questions sur trois axes indépendants, fournit les décisions
 techniques de départ et réserve à l'utilisateur les choix qui changent le
 produit, le risque, le coût ou le délai.
+
+Version native Claude Code du
+[skill Codex du même nom](../../codex/std-dev-project/) : **cycle, gates,
+documents canoniques et état v4 sont identiques**. Seule l'exécution change ;
+voir [Ce qui change côté Claude](#ce-qui-change-côté-claude).
 
 ## Cycle v4
 
@@ -21,6 +26,30 @@ produit, le risque, le coût ou le délai.
 
 Une correction reste dans l'étape courante. Une étape antérieure n'est rouverte
 que lorsque le problème, le périmètre, le risque ou l'architecture change.
+
+## Ce qui change côté Claude
+
+| | Variante Codex | Ici |
+|---|---|---|
+| Suivi des étapes | État `.sdp/state.json` seul | Une tâche par étape, en plus de l'état qui reste la source de vérité |
+| Cadrage | Interrogation directe | Mode plan tant qu'aucune décision produit n'est arrêtée |
+| Étape `build` | Construction séquentielle | Lots parallèles via `plan-delegate-verify` quand le travail est décomposable |
+| Reviewer indépendant | `claude-independent-review` | `codex-independent-review` |
+| Politique de revue | `.codex/claude-review.json` | `.claude/codex-review.json` |
+| `reviews.mode` | `claude` ou `external-prompt` | `codex` ou `external-prompt` |
+
+Ce sont deux variantes distinctes et **assumées comme divergentes** : une
+évolution de l'une ne se reporte pas automatiquement sur l'autre.
+
+## Skills composés
+
+| Skill | Étape | Si absent |
+|---|---|---|
+| [`grill-me`](../../shared/grill-me/) | 1 et 2 | Prérequis dur : le skill s'arrête et demande son installation |
+| [`plan-delegate-verify`](../plan-delegate-verify/) | 3 | Construction séquentielle, signalée dans le plan de développement |
+| [`codex-independent-review`](../codex-independent-review/) | 2 et 4 | Bascule en `reviews.mode: external-prompt` |
+
+Aucun skill absent n'est simulé et aucun ne bloque le cycle, sauf `grill-me`.
 
 ## Aide aux profils guidés
 
@@ -59,15 +88,35 @@ python3 <skill-dir>/scripts/migrate-v3-to-v4.py --project <racine> --finalize
 
 La migration est atomique et idempotente. Elle conserve `.sdp/etat.json`, les
 champs inconnus et les anciens documents, marqués `superseded` seulement après
-validation des consolidations.
+validation des consolidations. Elle détecte une politique
+`.claude/codex-review.json` pour choisir `reviews.mode`.
+
+## Délégation de l'étape `build`
+
+Un lot n'est délégué que si le travail restant se découpe en au moins deux
+périmètres d'écriture réellement disjoints. Chaque lot reçoit ses exigences,
+ses critères d'acceptation, son périmètre exact et les preuves attendues ; il
+lui est interdit de toucher `.sdp/`, les documents canoniques et
+`docs/reviews/`.
+
+Aucune décision produit, dérogation, arbitrage de revue ou rédaction de gate
+n'est déléguée. Les comptes rendus des sous-agents sont vérifiés sur preuves
+avant la gate : une délégation ne réduit ni les contrôles, ni le niveau de
+garantie.
 
 ## Revues et publication
 
 Une revue finale est obligatoire ; la revue de conception dépend du niveau de
 garantie. Les budgets de contre-revues sont `2 / 3 / 4`. Quand
-`claude-independent-review` est disponible et déjà activé, il est utilisé dans
+`codex-independent-review` est disponible et déjà activé, il est utilisé dans
 une autorisation bornée à la version et au budget. Sinon le skill produit une
 mission neutre à copier dans un autre agent et attend son rapport.
+
+Le reviewer doit rester un modèle **distinct** de l'agent principal :
+`plan-delegate-verify` n'est jamais un substitut à ce jalon.
+
+Une revue Codex n'est bornée que par son délai configuré ; le CLI Codex n'expose
+aucun plafond de tours.
 
 Les artefacts bruts restent dans `docs/reviews/`, automatiquement ignorés par
 Git. Le rapport de vérification conserve seulement les IDs, décisions,
@@ -78,13 +127,18 @@ selon la stack. Le push n'arrive que dans `release-and-improve`. Les itérations
 successives actualisent la même branche et la même PR/MR jusqu'à sa fusion
 manuelle. Le skill ne fusionne jamais à la place de l'utilisateur.
 
+## Installation
+
+Voir l'[installation générale](../../../README.md#installation). Ce skill se
+copie dans `~/.claude/skills/std-dev-project/`.
+
 ## Vérifier le skill
 
 Depuis la racine de ce dépôt :
 
 ```text
-python3 skills/shared/std-dev-project/scripts/test_migrate_v3_to_v4.py
-python3 skills/shared/std-dev-project/scripts/test_skill_contract.py
+python3 skills/claude/std-dev-project/scripts/test_migrate_v3_to_v4.py
+python3 skills/claude/std-dev-project/scripts/test_skill_contract.py
 ```
 
 Les détails opérationnels restent dans les références chargées à la demande

@@ -12,10 +12,18 @@ propres à une plateforme.
 | Skill | Rôle | Claude | Codex |
 |---|---|:---:|:---:|
 | [`grill-me`](skills/shared/grill-me/) | Interroge sans relâche sur un plan ou une conception jusqu'à compréhension partagée | ✓ | ✓ |
-| [`std-dev-project`](skills/shared/std-dev-project/) | Livre un projet par un cycle v4 en cinq étapes, avec baselines automatiques, six documents canoniques, revues bornées et CI/PR itérative | ✓ | ✓ |
+| [`std-dev-project`](skills/codex/std-dev-project/) | Livre un projet par un cycle v4 en cinq étapes, avec baselines automatiques, six documents canoniques, revues bornées et CI/PR itérative | — | ✓ |
+| [`std-dev-project`](skills/claude/std-dev-project/) | Version native Claude Code du précédent : mêmes étapes, gates et documents, portés sur le suivi de tâches, le mode plan et la délégation | ✓ | — |
 | [`claude-independent-review`](skills/codex/claude-independent-review/) | Fait intervenir Claude comme reviewer indépendant en lecture seule, Codex gardant l'arbitrage | — | ✓ |
+| [`codex-independent-review`](skills/claude/codex-independent-review/) | Miroir du précédent : Codex devient le reviewer en lecture seule, Claude Code gardant l'arbitrage | ✓ | — |
 | [`plan-delegate-verify`](skills/codex/plan-delegate-verify/) | Planifie des lots indépendants, les délègue à des sous-agents calibrés et vérifie chaque résultat sur preuves | — | ✓ |
 | [`plan-delegate-verify`](skills/claude/plan-delegate-verify/) | Version native Claude Code du précédent : mêmes lots, délégation et vérification, portés sur l'outil Agent | ✓ | — |
+
+Trois skills existent en **deux variantes de même nom**, une par plateforme.
+Elles ne se marchent jamais dessus à l'installation : `skills/codex/` va dans
+`~/.codex/skills/` et `skills/claude/` dans `~/.claude/skills/`. Chaque variante
+évolue pour elle-même — une amélioration de l'une ne se reporte pas
+automatiquement sur l'autre.
 
 ## Installation
 
@@ -81,17 +89,24 @@ modifiée : la copie écrase sans prévenir.
 ```text
 skills/
 ├── shared/     skills fonctionnant sur Claude Code et Codex
-│   ├── grill-me/
-│   └── std-dev-project/
+│   └── grill-me/
 ├── codex/      skills dépendant de fonctions propres à Codex
+│   ├── std-dev-project/
 │   ├── claude-independent-review/
 │   └── plan-delegate-verify/
 └── claude/     skills dépendant de fonctions propres à Claude Code
+    ├── std-dev-project/
+    ├── codex-independent-review/
     └── plan-delegate-verify/
 ```
 
 Le répertoire `claude/` regroupe les skills qui dépendent de fonctions propres à
-Claude Code (outil Agent, suivi de tâches).
+Claude Code (outil Agent, suivi de tâches, mode plan).
+
+Chaque skill de revue indépendante fait appel à **l'autre** plateforme : le
+reviewer doit être un modèle distinct de celui qui a produit le travail, sans
+quoi il en partage les angles morts. Ces deux skills exigent donc que les deux
+CLI soient installées, l'hôte et le reviewer.
 
 La compatibilité est aussi déclarée dans le README de chaque skill, qui fait
 foi : si un skill change de catégorie, son répertoire suit, mais sa
