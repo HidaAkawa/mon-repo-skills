@@ -1,80 +1,91 @@
 # `std-dev-project`
 
 **Compatibilité : Claude Code et Codex.** Prérequis : le skill
-[`grill-me`](../grill-me/), `git`, et `gh` pour les écritures GitHub.
+[`grill-me`](../grill-me/) et Git. Une CLI de forge est utile seulement si le
+projet doit être publié.
 
-Conduit un projet de développement selon un cycle en sept étapes imposées. Le
-skill adapte les questions au niveau de l'utilisateur, le niveau de garantie
-requis aux risques du produit et les artefacts à sa complexité technique.
+Le skill conduit un projet logiciel jusqu'à une version vérifiée et publiable.
+Il calibre ses questions sur trois axes indépendants, fournit les décisions
+techniques de départ et réserve à l'utilisateur les choix qui changent le
+produit, le risque, le coût ou le délai.
 
-Le but reste de livrer un produit : la documentation n'existe que pour aider à
-construire, vérifier, diagnostiquer, exploiter ou faire évoluer.
+## Cycle v4
 
-## Le cycle
-
-| # | Étape | Sortie principale |
+| Étape | Gate observable | Documents créés ou consolidés |
 |---|---|---|
-| 0 | Calibration | profil, dépôt, état v3 |
-| 0-bis | Archéologie | brouillons en lecture seule |
-| 1 | Objectif | `docs/objectif.md` |
-| 2 | Non-fonctionnel | niveau de garantie requis, architecture, tests, observabilité |
-| 3 | Fonctionnel | comportements, tests et signaux diagnostiques |
-| 4 | Développement | produit, tests et trace réelle |
-| 5 | Tests et feedback | recette et exercice de troubleshooting |
-| 6 | Backlog | issues priorisées, roadmap si utile |
-| 7 | Itération | manifeste de release et décisions à rouvrir |
+| `initiate-and-frame` | charte approuvée, risques et profil compris | registre documentaire, charte projet |
+| `define` | exigences testables, baseline et stratégie cohérentes | SRS, plan de développement |
+| `build` | parcours principal, tests et télémétrie exécutables | mise à jour du SRS et du plan |
+| `verify` | usage réel, contrôles locaux verts, revue close | rapport de vérification |
+| `release-and-improve` | candidat traçable et PR/MR verte ou statut local explicite | record de release |
 
-## Trois axes indépendants
+Une correction reste dans l'étape courante. Une étape antérieure n'est rouverte
+que lorsque le problème, le périmètre, le risque ou l'architecture change.
 
-- **Profil utilisateur** : règle vocabulaire et questions.
-- **Niveau de garantie requis** : `essentiel`, `renforce` ou `critique`, selon
-  les conséquences d'une erreur.
-- **Complexité** : déclenche tracing distribué, contrats, modèles et diagrammes.
+## Aide aux profils guidés
 
-Un utilisateur débutant n'abaisse jamais la qualité d'un projet critique :
-l'agent prend les décisions techniques, les explique simplement et les
-documente.
+`grill-me` commence par trois questions de calibrage sur le développement,
+l'exploitation et l'assurance. Le skill ne pose ensuite que des questions
+métier à un profil `guided`. Une réponse inconnue devient une hypothèse
+`ASM-###` et déclenche une valeur prudente au lieu de bloquer le travail.
 
-## Observabilité
+Les baselines couvrent les archétypes `web`, `api`, `mobile`, `cli`, `library`,
+`batch` et `distributed` aux niveaux `standard`, `elevated` et `critical`. Elles
+fournissent directement :
 
-Toute unité d'exécution significative est tracée de bout en bout avec
-OpenTelemetry. Les logs portent les identifiants de corrélation. Un projet
-simple exporte localement ; un projet distribué propage W3C Trace Context ; un
-projet critique ajoute métriques, SLO, alertes, audit et runbooks.
+- contrôles de sécurité et de chaîne d'approvisionnement ;
+- seuils initiaux de qualité et de performance ;
+- traces, logs, métriques et règles d'exclusion de données ;
+- tests, preuves, coûts et contraintes à expliquer.
 
-Le niveau applicatif se règle par la variable conventionnelle de la stack ou :
+Les valeurs sont des points de départ révisables et non des garanties
+universelles. Une réduction exige une dérogation explicite.
 
-```text
-APP_LOG_LEVEL=trace|debug|info|warn|error|fatal
-```
+## Documents et état
 
-`OTEL_LOG_LEVEL` reste réservé aux diagnostics internes du SDK OpenTelemetry.
+Six gabarits canoniques évitent l'empilement documentaire : registre, charte,
+SRS, plan de développement, rapport de vérification et record de release. Les
+noms sont ASCII en `kebab-case`, les IDs ne sont jamais réutilisés et les
+documents portent leur version, statut, responsables, dates et baseline Git.
 
-## Documentation
-
-Les documents cœur sont canoniques et versionnés par Git :
+L'état vit dans `.sdp/state.json` avec `schema_version: 4`. Un projet v3 est
+d'abord analysé sans écriture puis migré explicitement avec :
 
 ```text
-docs/index.md
-docs/objectif.md
-docs/spec-nf.md
-docs/spec-fonctionnelle.md
-docs/feedback.md
+python3 <skill-dir>/scripts/migrate-v3-to-v4.py --project <racine>
+python3 <skill-dir>/scripts/migrate-v3-to-v4.py --project <racine> --apply
+python3 <skill-dir>/scripts/migrate-v3-to-v4.py --project <racine> --finalize
 ```
 
-Architecture, ADR, stratégie et rapport de tests, modèle de menace, traçabilité
-et runbooks ne sont créés que lorsqu'ils apportent une preuve ou une aide
-opérationnelle réelle. Aucun dossier documentaire vide n'est créé.
+La migration est atomique et idempotente. Elle conserve `.sdp/etat.json`, les
+champs inconnus et les anciens documents, marqués `superseded` seulement après
+validation des consolidations.
 
-Les projets utilisant l'ancien schéma migrent sans recommencer le cycle. En v2,
-le champ `assurance` devient `garantie_requise` sans changer son contenu. Les
-documents `*-vN.md` restent historiques ; les documents canoniques apparaissent
-progressivement lorsque leur phase est touchée.
+## Revues et publication
 
-## Utilisation
+Une revue finale est obligatoire ; la revue de conception dépend du niveau de
+garantie. Les budgets de contre-revues sont `2 / 3 / 4`. Quand
+`claude-independent-review` est disponible et déjà activé, il est utilisé dans
+une autorisation bornée à la version et au budget. Sinon le skill produit une
+mission neutre à copier dans un autre agent et attend son rapport.
+
+Les artefacts bruts restent dans `docs/reviews/`, automatiquement ignorés par
+Git. Le rapport de vérification conserve seulement les IDs, décisions,
+résultats et empreintes SHA-256.
+
+Si une forge est configurée, les contrôles CI sont définis puis implémentés
+selon la stack. Le push n'arrive que dans `release-and-improve`. Les itérations
+successives actualisent la même branche et la même PR/MR jusqu'à sa fusion
+manuelle. Le skill ne fusionne jamais à la place de l'utilisateur.
+
+## Vérifier le skill
+
+Depuis la racine de ce dépôt :
 
 ```text
-Guide-moi pour construire <projet>
+python3 skills/shared/std-dev-project/scripts/test_migrate_v3_to_v4.py
+python3 skills/shared/std-dev-project/scripts/test_skill_contract.py
 ```
 
-L'état vit dans `.sdp/etat.json` et permet de reprendre sur plusieurs sessions.
+Les détails opérationnels restent dans les références chargées à la demande
+par `SKILL.md`.
