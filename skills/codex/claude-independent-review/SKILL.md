@@ -15,7 +15,8 @@ Résoudre `<skill-dir>` comme le dossier absolu contenant ce `SKILL.md`. Exécut
 - Si `.codex/claude-review.json` n'existe pas, suivre **Initialiser le projet**.
 - Si l'utilisateur demande explicitement une revue, considérer cette revue initiale comme autorisée.
 - Si un jalon configuré est atteint, annoncer mission, périmètre, angles et exclusions, puis lancer la revue sans redemander d'autorisation.
-- Ne jamais lancer une contre-revue sans confirmation explicite. Une demande explicite de contre-revue vaut confirmation.
+- En usage autonome, ne jamais lancer une contre-revue sans confirmation explicite. Une demande explicite de contre-revue vaut confirmation et le runner exige `--confirm-counter-review`.
+- Lorsqu'il est appelé par `std-dev-project`, accepter à la place `--sdp-authorized` uniquement si le runner valide l'état v4, la version, le jalon et le budget `2 / 3 / 4`.
 - Regrouper les jalons compatibles qui portent sur le même état.
 - Limiter chaque revue à une seule racine de projet.
 
@@ -31,8 +32,9 @@ Résoudre `<skill-dir>` comme le dossier absolu contenant ce `SKILL.md`. Exécut
 
    `python3 <skill-dir>/scripts/claude_review.py install-policy --project <racine> --config <proposition.json>`
 
-8. Supprimer le fichier de proposition temporaire. Vérifier la configuration avec `validate-config`.
-9. Pour modifier une politique existante, présenter les différences, obtenir l'accord, puis utiliser `install-policy --replace`. Ne jamais modifier silencieusement modèle, effort, jalons ou sources de vérité.
+8. Le runner ajoute aussi `/docs/reviews/` et, s'il diffère, `reports.directory` au `.gitignore`. S'il avertit que des audits sont déjà suivis, les laisser indexés et demander séparément avant toute désindexation.
+9. Supprimer le fichier de proposition temporaire. Vérifier la configuration avec `validate-config`.
+10. Pour modifier une politique existante, présenter les différences, obtenir l'accord, puis utiliser `install-policy --replace`. Ne jamais modifier silencieusement modèle, effort, jalons ou sources de vérité.
 
 Pour un ancien brouillon `schema_version: 0`, utiliser `python3 <skill-dir>/scripts/claude_review.py migrate-config --input <ancien> --output <nouveau>`, faire valider les différences, puis installer le nouveau fichier. Ne jamais migrer implicitement une politique de projet.
 
@@ -40,7 +42,7 @@ Le programme ne conserve dans le projet que la politique et le bloc délimité d
 
 ## Désactiver dans le projet
 
-1. Expliquer que la désactivation retire uniquement `.codex/claude-review.json` et le bloc délimité `claude-independent-review` dans le `AGENTS.md` racine. Préciser que tous les rapports, résolutions et dossiers de preuves restent en place.
+1. Expliquer que la désactivation retire uniquement `.codex/claude-review.json` et le bloc délimité `claude-independent-review` dans le `AGENTS.md` racine. Préciser que tous les rapports, résolutions et dossiers de preuves restent en place et que `/docs/reviews/` reste dans `.gitignore`.
 2. Une demande explicite de désactivation autorise ces deux retraits. Sinon, obtenir une confirmation avant toute écriture.
 3. Exécuter :
 
@@ -55,8 +57,9 @@ La commande est idempotente. Elle refuse un bloc `AGENTS.md` incomplet ou dupliq
 
 1. Exécuter `python3 <skill-dir>/scripts/claude_review.py doctor` puis le même runner avec `validate-config --project <racine>`.
 2. Formuler une mission neutre : objectif, résultat attendu, périmètre, angles de revue, critères, exclusions et preuves de tests déjà obtenues. Ne pas révéler les conclusions de Codex ni un défaut attendu lors d'une revue générale.
-3. Pour une contre-revue, résumer la mission à l'utilisateur et obtenir sa confirmation. Inclure ensuite le rapport précédent et sa résolution avec `--audit-context`.
-4. Utiliser `--include` uniquement après validation de l'utilisateur lorsque le snapshot dépasse les seuils. Ne jamais tronquer automatiquement.
+3. Pour une contre-revue autonome, résumer la mission à l'utilisateur, obtenir sa confirmation, inclure le rapport précédent et sa résolution avec `--audit-context`, puis passer `--confirm-counter-review`.
+4. Pour une contre-revue demandée par `std-dev-project`, ne pas redemander si `.sdp/state.json` porte l'autorisation bornée ; passer `--sdp-authorized`. Laisser le runner refuser tout jalon, version ou budget hors contrat.
+5. Utiliser `--include` uniquement après validation de l'utilisateur lorsque le snapshot dépasse les seuils. Ne jamais tronquer automatiquement.
 
 ## Lancer la revue
 
@@ -74,7 +77,7 @@ python3 <skill-dir>/scripts/claude_review.py review \
   [--include <glob>]
 ```
 
-Utiliser `--kind counter` pour une contre-revue. Passer toujours `--progress` lorsque le skill lance une revue. Le runner émet alors sur `stderr` une progression JSONL expurgée avec les phases, la durée, les tours, les outils de lecture et un battement toutes les 15 secondes ; ne pas interpréter ces lignes comme le rapport. Il réserve `stdout` au résultat JSON final.
+Utiliser `--kind counter --confirm-counter-review` pour une contre-revue autonome confirmée, ou `--kind counter --sdp-authorized` pour une contre-revue préautorisée par l'état v4. Passer toujours `--progress` lorsque le skill lance une revue. Le runner émet alors sur `stderr` une progression JSONL expurgée avec les phases, la durée, les tours, les outils de lecture et un battement toutes les 15 secondes ; ne pas interpréter ces lignes comme le rapport. Il réserve `stdout` au résultat JSON final.
 
 Le runner travaille dans un snapshot temporaire, n'expose à Claude que `Read`, `Glob` et `Grep`, et ne conserve aucun snapshot, log, cache ou artefact d'échec. Après une interruption contrôlée, expliquer l'erreur à partir de la dernière phase visible. Un arrêt non interceptable comme `SIGKILL` ne peut révéler que le dernier événement déjà émis.
 
@@ -86,9 +89,9 @@ Le runner travaille dans un snapshot temporaire, n'expose à Claude que `Read`, 
 4. Corriger un P3 seulement s'il est local, simple, sans dépendance, migration, API publique ni extension fonctionnelle.
 5. Exécuter les vérifications pertinentes avec les outils de Codex ; Claude n'exécute aucune commande. Préférer les options sans cache ni artefact, inventorier l'état avant le contrôle et supprimer seulement les fichiers jetables dont la création par cette passe est certaine. Ne jamais supprimer un cache ou un build préexistant.
 6. Créer un fichier de résolution distinct seulement s'il existe des constats à arbitrer ou traiter. Référencer le rapport, les décisions, les corrections et les contrôles. Ne jamais réécrire le rapport Claude.
-7. Proposer une contre-revue ciblée sur les correctifs et leurs régressions directes. Attendre une confirmation explicite avant chaque nouvelle passe.
+7. Proposer une contre-revue ciblée sur les correctifs et leurs régressions directes. En usage autonome, attendre une confirmation explicite avant chaque passe. Avec `std-dev-project`, s'arrêter dès qu'aucun P0–P2 retenu ne reste ouvert ou dès que le budget borné est épuisé.
 
-Ne jamais committer, pousser ou publier les artefacts d'audit sans demande distincte.
+Ne jamais committer, pousser ou publier les artefacts d'audit. Ils restent dans le répertoire `docs/reviews/`, ignoré par Git ; si certains étaient déjà suivis, ne jamais les désindexer sans demande distincte.
 
 ## Ressources
 

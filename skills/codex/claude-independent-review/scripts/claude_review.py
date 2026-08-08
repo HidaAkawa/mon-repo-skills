@@ -32,12 +32,15 @@ from typing import Any, Iterable, Sequence
 
 SCHEMA_VERSION = 1
 CONFIG_RELATIVE = Path(".codex/claude-review.json")
+SDP_STATE_RELATIVE = Path(".sdp/state.json")
+REVIEW_IGNORE_RULE = "/docs/reviews/"
 AGENTS_START = "<!-- claude-independent-review:start -->"
 AGENTS_END = "<!-- claude-independent-review:end -->"
 EVIDENCE_DIRNAME = ".independent-review-evidence"
 MAX_DIFF_BYTES = 25 * 1024 * 1024
 PROGRESS_HEARTBEAT_SECONDS = 15.0
 SECONDS_PER_MINUTE = 60.0
+STATE_LOCK_TIMEOUT_SECONDS = 30.0
 ALLOWED_REVIEW_TYPES = {"code", "architecture", "security", "design", "content", "general"}
 ALLOWED_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 MOVING_MODEL_ALIASES = {
@@ -412,15 +415,17 @@ def _agents_block(language: str) -> str:
         body = (
             "## Revue indépendante Claude\n\n"
             "Lorsque `.codex/claude-review.json` existe, utiliser `$claude-independent-review` aux jalons applicables "
-            "avant de livrer le résultat. Les revues initiales configurées sont préautorisées après annonce ; "
-            "toute contre-revue exige une confirmation explicite."
+            "avant de livrer le résultat. Les revues initiales configurées sont préautorisées après annonce. "
+            "Une contre-revue exige une confirmation explicite, sauf autorisation bornée et valide portée par "
+            "`.sdp/state.json` v4 lors d'un appel par `$std-dev-project`."
         )
     else:
         body = (
             "## Independent Claude review\n\n"
             "When `.codex/claude-review.json` exists, use `$claude-independent-review` at applicable milestones "
-            "before handing off the result. Configured initial reviews are pre-authorized after an announcement; "
-            "every counter-review requires explicit confirmation."
+            "before handing off the result. Configured initial reviews are pre-authorized after an announcement. "
+            "A counter-review requires explicit confirmation unless a valid, bounded `.sdp/state.json` v4 "
+            "authorization is supplied by `$std-dev-project`."
         )
     return f"{AGENTS_START}\n{body}\n{AGENTS_END}"
 
@@ -459,7 +464,8 @@ def render_agents_without_pointer(existing: str | None) -> str | None:
     end = existing.index(AGENTS_END, start) + len(AGENTS_END)
     if end < len(existing) and existing[end] == "\n":
         end += 1
-    return existing[:start] + existing[end:]
+    rendered = existing[:start] + existing[end:]
+    return "" if not rendered.strip() else rendered
 
 
 def _atomic_write(path: Path, content: bytes, *, replace: bool) -> None:
@@ -493,24 +499,208 @@ def _ensure_output_within(project_root: Path, path: Path, context: str) -> None:
         raise ReviewError(f"{context} sortirait de la racine du projet : {path}") from exc
 
 
-def install_policy(project_root: Path, proposal_path: Path, replace: bool) -> None:
+def _ignore_rule(directory: str) -> str:
+    return "/" + directory.strip("/") + "/"
+
+
+def render_gitignore(existing: str | None, rules: Sequence[str] = (REVIEW_IGNORE_RULE,)) -> str:
+    content = existing or ""
+    lines = content.splitlines()
+    for rule in dict.fromkeys(rules):
+        if rule in lines:
+            continue
+        separator = "" if not content or content.endswith(("\n", "\r")) else "\n"
+        content += separator + rule + "\n"
+        lines.append(rule)
+    return content
+
+
+def tracked_review_paths(project_root: Path, directories: Sequence[str] = ("docs/reviews",)) -> list[str]:
+    if shutil.which("git") is None:
+        return []
+    tracked: list[str] = []
+    for directory in dict.fromkeys(directories):
+        try:
+            completed = subprocess.run(
+                ["git", "ls-files", "--", directory],
+                cwd=project_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                text=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        tracked.extend(line for line in completed.stdout.splitlines() if line)
+    return list(dict.fromkeys(tracked))
+
+
+@contextlib.contextmanager
+def _exclusive_state_lock(state_path: Path) -> Iterable[None]:
+    lock_root = Path(tempfile.gettempdir()) / "claude-independent-review-locks"
+    lock_root.mkdir(parents=True, exist_ok=True)
+    lock_name = hashlib.sha256(str(state_path.resolve()).encode("utf-8")).hexdigest() + ".lock"
+    lock_path = lock_root / lock_name
+    with lock_path.open("a+b") as stream:
+        stream.seek(0, os.SEEK_END)
+        if stream.tell() == 0:
+            stream.write(b"0")
+            stream.flush()
+        deadline = time.monotonic() + STATE_LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    stream.seek(0)
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError as exc:
+                if time.monotonic() >= deadline:
+                    raise ReviewError("Verrou de budget std-dev-project indisponible après 30 secondes") from exc
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                import msvcrt
+
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+def _evaluate_sdp_authorization(
+    path: Path,
+    milestone_ids: Sequence[str],
+    *,
+    consume: bool,
+) -> dict[str, Any]:
+    data = load_json(path)
+    if data.get("schema_version") != 4:
+        raise ReviewError("L'autorisation std-dev-project exige `.sdp/state.json` schema_version 4")
+    reviews = data.get("reviews")
+    delivery = data.get("delivery")
+    guarantee = data.get("guarantee")
+    if not isinstance(reviews, dict) or not isinstance(delivery, dict) or not isinstance(guarantee, dict):
+        raise ReviewError("État v4 incomplet pour autoriser une contre-revue")
+    if reviews.get("mode") != "claude":
+        raise ReviewError("L'état v4 n'active pas le reviewer Claude pour cette version")
+    authorization = reviews.get("authorization")
+    counter_reviews = reviews.get("counter_reviews")
+    if not isinstance(authorization, dict) or not isinstance(counter_reviews, dict):
+        raise ReviewError("Autorisation ou budget de contre-revue absent de l'état v4")
+    if authorization.get("source") != "std-dev-project-v4":
+        raise ReviewError("La source de l'autorisation n'est pas std-dev-project v4")
+    if authorization.get("granted") is not True:
+        raise ReviewError("Les contre-revues automatiques ne sont pas autorisées dans l'état v4")
+    working_version = delivery.get("working_version")
+    if not isinstance(working_version, str) or authorization.get("version") != working_version:
+        raise ReviewError("L'autorisation de contre-revue ne couvre pas la version de travail")
+    level = guarantee.get("level")
+    expected_maximum = {"standard": 2, "elevated": 3, "critical": 4}.get(level)
+    maximum = counter_reviews.get("maximum")
+    used = counter_reviews.get("used")
+    if expected_maximum is None or maximum != expected_maximum:
+        raise ReviewError("Le budget de contre-revue ne correspond pas au niveau de garantie")
+    if type(used) is not int or used < 0 or used >= maximum:
+        raise ReviewError("Le budget de contre-revue est épuisé ou invalide")
+    declared: set[str] = set()
+    for item in reviews.get("milestones", []):
+        if isinstance(item, str):
+            declared.add(item)
+        elif isinstance(item, dict) and isinstance(item.get("id"), str):
+            declared.add(item["id"])
+    missing = [identifier for identifier in milestone_ids if identifier not in declared]
+    if not milestone_ids or missing:
+        raise ReviewError("Jalon absent de l'autorisation std-dev-project : " + ", ".join(missing or ["<aucun>"]))
+    if consume:
+        counter_reviews["used"] = used + 1
+        data["updated_at"] = dt.datetime.now(dt.timezone.utc).date().isoformat()
+        _atomic_write(
+            path,
+            (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+            replace=True,
+        )
+    return {
+        "source": "std-dev-project-v4",
+        "version": working_version,
+        "maximum": maximum,
+        "used": used + (1 if consume else 0),
+        "milestones": list(milestone_ids),
+    }
+
+
+def validate_sdp_authorization(
+    project_root: Path,
+    milestone_ids: Sequence[str],
+    *,
+    consume: bool = False,
+) -> dict[str, Any]:
+    path = project_root / SDP_STATE_RELATIVE
+    _ensure_output_within(project_root, path, "État std-dev-project")
+    if not consume:
+        return _evaluate_sdp_authorization(path, milestone_ids, consume=False)
+    with _exclusive_state_lock(path):
+        return _evaluate_sdp_authorization(path, milestone_ids, consume=True)
+
+
+@contextlib.contextmanager
+def sdp_review_session(
+    project_root: Path,
+    milestone_ids: Sequence[str],
+    *,
+    enabled: bool,
+) -> Iterable[dict[str, Any] | None]:
+    if not enabled:
+        yield None
+        return
+    path = project_root / SDP_STATE_RELATIVE
+    _ensure_output_within(project_root, path, "État std-dev-project")
+    with _exclusive_state_lock(path):
+        yield {
+            "path": path,
+            "authorization": _evaluate_sdp_authorization(path, milestone_ids, consume=False),
+        }
+
+
+def install_policy(project_root: Path, proposal_path: Path, replace: bool) -> dict[str, Any]:
     raw = load_json(proposal_path)
     policy = validate_policy(raw)
     project_root.mkdir(parents=True, exist_ok=True)
     config_path = project_root / CONFIG_RELATIVE
     agents_path = project_root / "AGENTS.md"
+    gitignore_path = project_root / ".gitignore"
     _ensure_output_within(project_root, config_path, "Politique")
     _ensure_output_within(project_root, agents_path, "Pointeur AGENTS.md")
+    _ensure_output_within(project_root, gitignore_path, "Gitignore")
     if config_path.exists() and not replace:
         raise ReviewError("Une politique existe déjà ; présenter les différences puis utiliser --replace")
     old_config = config_path.read_bytes() if config_path.exists() else None
     old_agents = agents_path.read_bytes() if agents_path.exists() else None
+    old_gitignore = gitignore_path.read_bytes() if gitignore_path.exists() else None
     existing_agents = old_agents.decode("utf-8") if old_agents is not None else None
+    try:
+        existing_gitignore = old_gitignore.decode("utf-8") if old_gitignore is not None else None
+    except UnicodeError as exc:
+        raise ReviewError(".gitignore doit être encodé en UTF-8") from exc
     rendered_agents = render_agents(existing_agents, policy.language).encode("utf-8")
     rendered_config = (json.dumps(raw, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    report_rule = _ignore_rule(policy.report_directory)
+    rendered_gitignore = render_gitignore(existing_gitignore, (REVIEW_IGNORE_RULE, report_rule)).encode("utf-8")
+    tracked = tracked_review_paths(project_root, ("docs/reviews", policy.report_directory))
     try:
         _atomic_write(config_path, rendered_config, replace=True)
         _atomic_write(agents_path, rendered_agents, replace=True)
+        _atomic_write(gitignore_path, rendered_gitignore, replace=True)
     except Exception:
         try:
             if old_config is None:
@@ -521,11 +711,24 @@ def install_policy(project_root: Path, proposal_path: Path, replace: bool) -> No
                 agents_path.unlink(missing_ok=True)
             else:
                 _atomic_write(agents_path, old_agents, replace=True)
+            if old_gitignore is None:
+                gitignore_path.unlink(missing_ok=True)
+            else:
+                _atomic_write(gitignore_path, old_gitignore, replace=True)
         finally:
             codex_directory = project_root / ".codex"
             if codex_directory.exists() and not any(codex_directory.iterdir()):
                 codex_directory.rmdir()
         raise
+    return {
+        "gitignore": str(gitignore_path),
+        "warnings": [
+            "Des rapports de revue sont déjà suivis par Git ; ils n'ont pas été désindexés : "
+            + ", ".join(tracked)
+        ]
+        if tracked
+        else [],
+    }
 
 
 def disable_policy(project_root: Path) -> dict[str, Any]:
@@ -672,16 +875,15 @@ def _git_paths(project_root: Path) -> list[str]:
     return sorted({_normalize(item.decode("utf-8", errors="replace")) for item in completed.stdout.split(b"\0") if item})
 
 
-def _walk_paths(project_root: Path, report_directory: str) -> list[str]:
+def _walk_paths(project_root: Path, report_directories: Sequence[str]) -> list[str]:
     paths: list[str] = []
-    report_parts = PurePosixPath(report_directory).parts
     for current, directories, files in os.walk(project_root, topdown=True, followlinks=False):
         current_path = Path(current)
         relative_current = current_path.relative_to(project_root).as_posix()
         kept: list[str] = []
         for directory in directories:
             relative = directory if relative_current == "." else f"{relative_current}/{directory}"
-            if directory in DEFAULT_EXCLUDED_DIRS or _matches(relative, [report_directory]):
+            if directory in DEFAULT_EXCLUDED_DIRS or _matches(relative, report_directories):
                 continue
             if (current_path / directory).is_symlink():
                 paths.append(relative)
@@ -690,7 +892,7 @@ def _walk_paths(project_root: Path, report_directory: str) -> list[str]:
         directories[:] = kept
         for filename in files:
             relative = filename if relative_current == "." else f"{relative_current}/{filename}"
-            if report_parts and _matches(relative, [report_directory]):
+            if _matches(relative, report_directories):
                 continue
             paths.append(relative)
     return sorted(set(paths))
@@ -710,10 +912,11 @@ def _select_candidates(
     git_mode: bool,
     include_patterns: Sequence[str],
 ) -> tuple[list[Candidate], list[dict[str, str]]]:
-    raw_paths = _git_paths(project_root) if git_mode else _walk_paths(project_root, policy.report_directory)
+    report_directories = list(dict.fromkeys(("docs/reviews", policy.report_directory)))
+    raw_paths = _git_paths(project_root) if git_mode else _walk_paths(project_root, report_directories)
     candidates: list[Candidate] = []
     excluded: list[dict[str, str]] = []
-    default_patterns = [policy.report_directory, ".codex"] if git_mode else [*DEFAULT_EXCLUDED_DIRS, policy.report_directory]
+    default_patterns = [*report_directories, ".codex"] if git_mode else [*DEFAULT_EXCLUDED_DIRS, *report_directories]
     for relative in raw_paths:
         if _hard_secret(relative):
             excluded.append({"path": relative, "reason": "hard_secret"})
@@ -1523,8 +1726,25 @@ def command_review(arguments: argparse.Namespace, skill_root: Path) -> dict[str,
     test_evidence = [Path(value).resolve() if Path(value).is_absolute() else project_root / value for value in arguments.test_evidence]
     if arguments.kind == "counter" and not audit_context:
         raise ReviewError("Une contre-revue exige au moins un --audit-context")
+    if arguments.sdp_authorized and arguments.kind != "counter":
+        raise ReviewError("--sdp-authorized s'applique uniquement à une contre-revue")
+    if arguments.confirm_counter_review and arguments.kind != "counter":
+        raise ReviewError("--confirm-counter-review s'applique uniquement à une contre-revue")
+    if arguments.sdp_authorized and arguments.confirm_counter_review:
+        raise ReviewError("Choisir soit la confirmation ponctuelle, soit l'autorisation std-dev-project")
+    if arguments.kind == "counter" and not (arguments.confirm_counter_review or arguments.sdp_authorized):
+        raise ReviewError(
+            "Une contre-revue autonome exige --confirm-counter-review après confirmation explicite de l'utilisateur"
+        )
     reporter.emit("validate", "completed", model=policy.model, effort=policy.effort)
-    with tempfile.TemporaryDirectory(prefix="claude-independent-review-") as temporary_name:
+    authorization = None
+    with sdp_review_session(
+        project_root,
+        arguments.milestone,
+        enabled=arguments.sdp_authorized,
+    ) as authorization_session, tempfile.TemporaryDirectory(prefix="claude-independent-review-") as temporary_name:
+        if authorization_session is not None:
+            authorization = authorization_session["authorization"]
         reporter.emit("snapshot", "started")
         snapshot = build_snapshot(
             project_root,
@@ -1575,14 +1795,36 @@ def command_review(arguments: argparse.Namespace, skill_root: Path) -> dict[str,
             arguments.milestone,
             slug,
         )
+        if arguments.sdp_authorized:
+            try:
+                assert authorization_session is not None
+                authorization = _evaluate_sdp_authorization(
+                    authorization_session["path"],
+                    arguments.milestone,
+                    consume=True,
+                )
+            except Exception:
+                report_path.unlink(missing_ok=True)
+                shutil.rmtree(evidence_path, ignore_errors=True)
+                _cleanup_empty([evidence_path.parent, report_path.parent])
+                raise
+            reporter.emit(
+                "authorization",
+                "consumed",
+                used=authorization["used"],
+                maximum=authorization["maximum"],
+            )
         reporter.emit("persist", "completed")
     reporter.emit("complete", "created")
-    return {
+    result = {
         "status": "created",
         "report": str(report_path),
         "evidence": str(evidence_path),
         "snapshot_sha256": snapshot.manifest["snapshot_sha256"],
     }
+    if authorization is not None:
+        result["authorization"] = authorization
+    return result
 
 
 @contextlib.contextmanager
@@ -1657,6 +1899,16 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument("--include", action="append", default=[])
     review_parser.add_argument("--test-evidence", action="append", default=[])
     review_parser.add_argument("--audit-context", action="append", default=[])
+    review_parser.add_argument(
+        "--sdp-authorized",
+        action="store_true",
+        help="Consommer l'autorisation bornée de `.sdp/state.json` v4 pour une contre-revue",
+    )
+    review_parser.add_argument(
+        "--confirm-counter-review",
+        action="store_true",
+        help="Attester la confirmation explicite de l'utilisateur pour une contre-revue autonome",
+    )
     review_parser.add_argument("--slug")
     review_parser.add_argument("--claude", default="claude")
     review_parser.add_argument("--progress", action="store_true", help="Émettre une progression JSONL expurgée sur stderr")
@@ -1689,11 +1941,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 }
             elif arguments.command == "install-policy":
                 project_root = Path(arguments.project).resolve()
-                install_policy(project_root, Path(arguments.config).resolve(), arguments.replace)
+                installation = install_policy(project_root, Path(arguments.config).resolve(), arguments.replace)
                 result = {
                     "status": "installed",
                     "config": str(project_root / CONFIG_RELATIVE),
                     "agents": str(project_root / "AGENTS.md"),
+                    **installation,
                 }
             elif arguments.command == "disable-policy":
                 project_root = Path(arguments.project).resolve()

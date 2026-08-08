@@ -12,13 +12,13 @@
 
 ## Emplacement et cycle de vie
 
-Conserver la politique dans `.codex/claude-review.json`. La faire valider par `<skill-dir>/scripts/claude_review.py validate-config`. Toute évolution doit être présentée à l'utilisateur avant `install-policy --replace`.
+Conserver la politique dans `.codex/claude-review.json`. La faire valider par `<skill-dir>/scripts/claude_review.py validate-config`. Toute évolution doit être présentée à l'utilisateur avant `install-policy --replace`. L'installation ajoute idempotemment `/docs/reviews/` et, s'il diffère, le répertoire `reports.directory` au `.gitignore`. Elle signale sans les désindexer les audits déjà suivis dans l'un ou l'autre chemin.
 
 Le runner accepte uniquement `schema_version: 1`. Un numéro futur ou inconnu est refusé sans migration implicite. Le sous-programme `migrate-config` peut convertir explicitement un brouillon version 0 en ajoutant les valeurs désormais obligatoires `max_turns`, `max_files` et `max_bytes`; il écrit toujours un nouveau fichier et ne remplace jamais l'original.
 
 ## Désactivation
 
-`disable-policy --project <racine>` retire uniquement `.codex/claude-review.json` et le bloc délimité géré par le skill dans `AGENTS.md`. La commande ne parcourt pas le répertoire `reports.directory` et ne supprime ni rapports, ni résolutions, ni preuves. Elle est idempotente et restaure la politique et `AGENTS.md` si une opération échoue.
+`disable-policy --project <racine>` retire uniquement `.codex/claude-review.json` et le bloc délimité géré par le skill dans `AGENTS.md`. La commande ne parcourt pas le répertoire `reports.directory`, ne supprime ni rapports, ni résolutions, ni preuves et conserve la règle `/docs/reviews/` dans `.gitignore`. Elle est idempotente et restaure la politique et `AGENTS.md` si une opération échoue.
 
 Après désactivation, les audits restent des artefacts autonomes du projet. Une réactivation installe une nouvelle politique selon le parcours normal sans écraser ces fichiers.
 
@@ -92,7 +92,7 @@ Valeurs d'effort : `low`, `medium`, `high`, `xhigh`, `max`.
 
 ## Jalons
 
-Écrire chaque condition comme un état observable par Codex. Le jalon autorise une revue initiale après annonce, jamais une contre-revue. Combiner les jalons compatibles portant sur le même snapshot.
+Écrire chaque condition comme un état observable par Codex. Le jalon autorise une revue initiale après annonce, jamais à lui seul une contre-revue. Une contre-revue autonome exige `--confirm-counter-review` après confirmation explicite. `--sdp-authorized` remplace cette attestation seulement si `.sdp/state.json` v4 autorise le même jalon et la même version avec un budget `2 / 3 / 4` encore disponible. Combiner les jalons compatibles portant sur le même snapshot.
 
 `focus_paths` cadre la mission mais ne réduit pas le snapshot normal. Après dépassement des seuils, utiliser des motifs `--include` validés ponctuellement par l'utilisateur. `git_baseline` indique la référence comparée au worktree ; utiliser `HEAD` par défaut et `null` hors Git.
 
@@ -108,10 +108,15 @@ Les liens symboliques vers l'extérieur sont consignés mais non copiés. Les li
 
 ## Artefacts persistants
 
-Après succès seulement :
+Après succès seulement, sous le `reports.directory` configuré
+(`docs/reviews` par défaut) :
 
-- `docs/reviews/<horodatage>-<jalon>-claude.md` ;
-- `docs/reviews/evidence/<même-identifiant>/manifest.json` ;
-- `docs/reviews/evidence/<même-identifiant>/diff.patch` en mode Git si le diff n'est pas vide.
+- `<reports.directory>/<horodatage>-<jalon>-claude.md` ;
+- `<reports.directory>/evidence/<même-identifiant>/manifest.json` ;
+- `<reports.directory>/evidence/<même-identifiant>/diff.patch` en mode Git si le diff n'est pas vide.
 
 Le rapport contient la mission exacte, les métadonnées et la réponse Claude intacte. La progression `--progress` reste uniquement dans le terminal. Aucun snapshot, prompt séparé, stderr, session, cache, journal de progression ou artefact de tentative échouée ne doit subsister.
+
+Tous ces chemins restent sous `reports.directory` et ne doivent pas entrer
+dans Git. `/docs/reviews/` reste également ignoré. L'index Git existant n'est
+jamais modifié automatiquement.
