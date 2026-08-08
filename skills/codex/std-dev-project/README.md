@@ -1,8 +1,13 @@
 # `std-dev-project`
 
-**Compatibilité : Claude Code et Codex.** Prérequis : le skill
-[`grill-me`](../grill-me/) et Git. Une CLI de forge est utile seulement si le
-projet doit être publié.
+**Compatibilité : Codex uniquement.** Prérequis : le skill
+[`grill-me`](../../shared/grill-me/) et Git. Une CLI de forge est utile
+seulement si le projet doit être publié.
+
+La version Claude Code de ce skill vit dans
+[`skills/claude/std-dev-project`](../../claude/std-dev-project/) : même cycle en
+cinq étapes et mêmes documents canoniques, mais un portage natif qui compose
+avec les skills propres à Claude Code.
 
 Le skill conduit un projet logiciel jusqu'à une version vérifiée et publiable.
 Il calibre ses questions sur trois axes indépendants, fournit les décisions
@@ -83,8 +88,8 @@ manuelle. Le skill ne fusionne jamais à la place de l'utilisateur.
 Depuis la racine de ce dépôt :
 
 ```text
-python3 skills/shared/std-dev-project/scripts/test_migrate_v3_to_v4.py
-python3 skills/shared/std-dev-project/scripts/test_skill_contract.py
+python3 skills/codex/std-dev-project/scripts/test_migrate_v3_to_v4.py
+python3 skills/codex/std-dev-project/scripts/test_skill_contract.py
 ```
 
 Les détails opérationnels restent dans les références chargées à la demande
