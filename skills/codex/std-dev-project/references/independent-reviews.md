@@ -20,6 +20,11 @@ Dans les deux cas, ajouter `/docs/reviews/` au `.gitignore`. Si
 désindexer sans confirmation. Ne pas retirer cette règle lors d'une
 désactivation.
 
+Le reviewer doit rester un modèle **distinct** de l'agent principal. Une revue
+menée par un sous-agent de la même famille ne vaut pas revue indépendante : elle
+partage les mêmes angles morts. Ne jamais utiliser `plan-delegate-verify` comme
+substitut à ce jalon.
+
 ## Jalons et budget
 
 | Garantie | Conception | Vérification | Contre-revues max/version |

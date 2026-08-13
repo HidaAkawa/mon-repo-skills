@@ -1,6 +1,6 @@
 ---
 name: std-dev-project
-description: Conduire, reconstruire ou reprendre un projet logiciel de bout en bout selon un cycle v4 en cinq étapes, avec cadrage adaptatif via grill-me, baselines automatiques de sécurité, qualité, performance et observabilité, preuves proportionnées au risque, revues indépendantes bornées, CI et livraison par PR/MR. À utiliser lorsqu'un projet doit être structuré ou lorsqu'un état .sdp/state.json ou .sdp/etat.json existe. Use when starting, rebuilding, migrating, or running a software project end to end.
+description: Conduire, reconstruire ou reprendre un projet logiciel de bout en bout selon un cycle v4 en cinq étapes, avec cadrage adaptatif via grill-me, baselines automatiques de sécurité, qualité, performance et observabilité, preuves proportionnées au risque, lots délégués à des sous-agents, revues indépendantes bornées, CI et livraison par PR/MR. À utiliser lorsqu'un projet doit être structuré ou lorsqu'un état .sdp/state.json ou .sdp/etat.json existe. Use when starting, rebuilding, migrating, or running a software project end to end.
 ---
 
 # std-dev-project
@@ -30,6 +30,22 @@ Charger ensuite uniquement les ressources utiles :
 - [references/standards-profile.md](references/standards-profile.md) pour créer
   ou contrôler les documents, jamais pour inventer une certification.
 
+## Skills composés
+
+| Skill | Étape | Rôle |
+|---|---|---|
+| `grill-me` | 1 et 2 | Calibrage et cadrage produit |
+| `plan-delegate-verify` | 3 | Lots parallèles quand le travail est décomposable |
+| `claude-independent-review` | 2 et 4 | Revue indépendante en lecture seule |
+
+`grill-me` est un prérequis dur. Les deux autres ont un comportement dégradé
+explicite décrit dans `workflow.md` : construire séquentiellement, ou basculer en
+`reviews.mode: external-prompt`. Ne jamais simuler un skill absent.
+
+L'invocation de `plan-delegate-verify` par ce skill vaut demande explicite : son
+déclenchement dépend du critère de découpe de l'étape 3, pas d'une demande
+d'orchestration formulée par l'utilisateur.
+
 ## Axes indépendants
 
 - `profile` règle le vocabulaire, le nombre de questions et l'autonomie laissée
@@ -52,6 +68,11 @@ Décider davantage pour lui et expliquer les conséquences en langage clair.
   potentiellement critique ou illicite.
 - Maintenir les six documents canoniques et ne créer une annexe que si son
   contenu ne reste pas lisible dans le document principal.
+- Ne déléguer que des lots de construction, jamais une décision produit, un
+  arbitrage de revue ou la rédaction d'une gate. Vérifier soi-même les preuves :
+  un compte rendu de sous-agent est une affirmation.
+- Confier les revues indépendantes à un modèle **distinct**. Un sous-agent de la
+  même famille partage les mêmes angles morts et ne vaut pas revue indépendante.
 - Conserver les rapports bruts sous `docs/reviews/`, ajouter
   `/docs/reviews/` au `.gitignore` et ne jamais désindexer un rapport suivi sans
   confirmation.

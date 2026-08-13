@@ -11,10 +11,6 @@ qui changent le produit, le risque, le coût ou le délai.
 
 Résoudre `<skill-dir>` comme le dossier absolu contenant ce fichier.
 
-Version native Claude Code du skill Codex du même nom : mêmes étapes, mêmes
-gates, mêmes six documents canoniques, même état v4. Seule l'exécution change —
-suivi de tâches, mode plan, délégation à des sous-agents, reviewer externe.
-
 ## Se situer
 
 1. Chercher `.sdp/state.json` à la racine du projet.
@@ -44,6 +40,10 @@ Charger ensuite uniquement les ressources utiles :
 `grill-me` est un prérequis dur. Les deux autres ont un comportement dégradé
 explicite décrit dans `workflow.md` : construire séquentiellement, ou basculer en
 `reviews.mode: external-prompt`. Ne jamais simuler un skill absent.
+
+L'invocation de `plan-delegate-verify` par ce skill vaut demande explicite : son
+déclenchement dépend du critère de découpe de l'étape 3, pas d'une demande
+d'orchestration formulée par l'utilisateur.
 
 ## Axes indépendants
 

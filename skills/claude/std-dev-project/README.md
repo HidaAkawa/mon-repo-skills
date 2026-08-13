@@ -33,7 +33,6 @@ que lorsque le problème, le périmètre, le risque ou l'architecture change.
 |---|---|---|
 | Suivi des étapes | État `.sdp/state.json` seul | Une tâche par étape, en plus de l'état qui reste la source de vérité |
 | Cadrage | Interrogation directe | Mode plan tant qu'aucune décision produit n'est arrêtée |
-| Étape `build` | Construction séquentielle | Lots parallèles via `plan-delegate-verify` quand le travail est décomposable |
 | Reviewer indépendant | `claude-independent-review` | `codex-independent-review` |
 | Politique de revue | `.codex/claude-review.json` | `.claude/codex-review.json` |
 | `reviews.mode` | `claude` ou `external-prompt` | `codex` ou `external-prompt` |
@@ -50,6 +49,11 @@ Ce sont deux variantes distinctes et **assumées comme divergentes** : une
 | [`codex-independent-review`](../codex-independent-review/) | 2 et 4 | Bascule en `reviews.mode: external-prompt` |
 
 Aucun skill absent n'est simulé et aucun ne bloque le cycle, sauf `grill-me`.
+
+`plan-delegate-verify` ne se déclenche normalement que sur demande explicite
+d'orchestration. Son invocation par `std-dev-project` vaut cette demande : à
+l'étape 3, c'est le critère de découpe en lots indépendants qui décide, pas une
+formulation de l'utilisateur.
 
 ## Aide aux profils guidés
 

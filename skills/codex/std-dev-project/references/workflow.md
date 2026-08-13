@@ -92,6 +92,24 @@ commit qui contient son propre enregistrement de gate. Mettre à jour
 
 ## Règles transverses
 
+**Délégation.** L'étape `build` peut être confiée à `plan-delegate-verify`
+lorsque le travail est décomposable. Voir « 3 — Construire ». Aucune autre étape
+n'est déléguée : le cadrage, l'arbitrage des revues et les décisions de gate
+restent tenus par l'agent principal.
+
+**Skills composés.** Ce skill en invoque trois. Si l'un manque, ne pas le
+simuler et ne pas bloquer :
+
+| Skill | Rôle | Absent |
+|---|---|---|
+| `grill-me` | Interrogation calibrée | Prérequis dur. Arrêter et demander son installation. |
+| `plan-delegate-verify` | Lots parallèles de l'étape `build` | Construire séquentiellement et le signaler dans le plan de développement. |
+| `claude-independent-review` | Revues indépendantes | Basculer en `reviews.mode: external-prompt`. |
+
+L'invocation de `plan-delegate-verify` par ce skill vaut demande explicite : son
+déclenchement dépend du critère de découpe de l'étape 3, pas d'une demande
+d'orchestration formulée par l'utilisateur.
+
 ### Documents canoniques
 
 Maintenir :
@@ -229,6 +247,26 @@ protocole reproductible. Commit du candidat :
 Construire le parcours principal de bout en bout avant d'élargir. Développer
 code, tests, sécurité, instrumentation et configuration CI dans le même lot.
 Un changement visible exige d'abord une mise à jour de l'exigence.
+
+### Déléguer les lots
+
+Invoquer `plan-delegate-verify` seulement si le travail restant se découpe en
+au moins deux lots réellement indépendants, dont les périmètres d'écriture ne se
+recoupent pas. Un parcours principal court, séquentiel ou fortement couplé se
+construit directement : le dire au lieu de fabriquer des lots artificiels.
+
+Chaque lot délégué reçoit, sans que le sous-agent ait à les redécouvrir :
+
+- les `SWR-###` qu'il implémente et leurs critères `AC-###` ;
+- son périmètre d'écriture exact, disjoint de celui des autres lots ;
+- les contrôles baseline applicables et les preuves `EVD-###` attendues ;
+- l'interdiction de modifier `.sdp/`, les documents canoniques et `docs/reviews/`.
+
+Ne jamais déléguer une décision produit, une dérogation, un arbitrage de revue
+ni la rédaction d'une gate. Les comptes rendus des sous-agents sont des
+affirmations : la gate de cette étape exige des preuves réellement obtenues,
+vérifiées par l'agent principal. Une délégation ne réduit ni les contrôles, ni
+les preuves, ni le niveau de garantie.
 
 Ne pas créer de journal narratif obligatoire : commits, issues, tests et traces
 sont les preuves. Créer un ADR uniquement pour une décision durable.
