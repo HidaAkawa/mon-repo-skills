@@ -94,9 +94,8 @@ commit qui contient son propre enregistrement de gate. Mettre à jour
 
 ### Mécanique native Claude Code
 
-Le cycle et ses gates sont identiques à la variante Codex. Trois mécanismes
-propres à Claude Code portent ce cycle ; ils changent l'exécution, jamais les
-critères.
+Trois mécanismes propres à Claude Code portent ce cycle ; ils changent
+l'exécution, jamais les critères.
 
 **Suivi des étapes.** Tenir une tâche par étape dans le gestionnaire de tâches
 de la session, passée `in_progress` à l'entrée et `completed` seulement quand sa
@@ -123,6 +122,10 @@ simuler et ne pas bloquer :
 | `grill-me` | Interrogation calibrée | Prérequis dur. Arrêter et demander son installation. |
 | `plan-delegate-verify` | Lots parallèles de l'étape `build` | Construire séquentiellement et le signaler dans le plan de développement. |
 | `codex-independent-review` | Revues indépendantes | Basculer en `reviews.mode: external-prompt`. |
+
+L'invocation de `plan-delegate-verify` par ce skill vaut demande explicite : son
+déclenchement dépend du critère de découpe de l'étape 3, pas d'une demande
+d'orchestration formulée par l'utilisateur.
 
 ### Documents canoniques
 

@@ -27,6 +27,21 @@ produit, le risque, le coût ou le délai.
 Une correction reste dans l'étape courante. Une étape antérieure n'est rouverte
 que lorsque le problème, le périmètre, le risque ou l'architecture change.
 
+## Skills composés
+
+| Skill | Étape | Si absent |
+|---|---|---|
+| [`grill-me`](../../shared/grill-me/) | 1 et 2 | Prérequis dur : le skill s'arrête et demande son installation |
+| [`plan-delegate-verify`](../plan-delegate-verify/) | 3 | Construction séquentielle, signalée dans le plan de développement |
+| [`claude-independent-review`](../claude-independent-review/) | 2 et 4 | Bascule en `reviews.mode: external-prompt` |
+
+Aucun skill absent n'est simulé et aucun ne bloque le cycle, sauf `grill-me`.
+
+`plan-delegate-verify` ne se déclenche normalement que sur demande explicite
+d'orchestration. Son invocation par `std-dev-project` vaut cette demande : à
+l'étape 3, c'est le critère de découpe en lots indépendants qui décide, pas une
+formulation de l'utilisateur.
+
 ## Aide aux profils guidés
 
 `grill-me` commence par trois questions de calibrage sur le développement,
@@ -73,6 +88,9 @@ garantie. Les budgets de contre-revues sont `2 / 3 / 4`. Quand
 `claude-independent-review` est disponible et déjà activé, il est utilisé dans
 une autorisation bornée à la version et au budget. Sinon le skill produit une
 mission neutre à copier dans un autre agent et attend son rapport.
+
+Le reviewer doit rester un modèle **distinct** de l'agent principal :
+`plan-delegate-verify` n'est jamais un substitut à ce jalon.
 
 Les artefacts bruts restent dans `docs/reviews/`, automatiquement ignorés par
 Git. Le rapport de vérification conserve seulement les IDs, décisions,

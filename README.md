@@ -12,8 +12,8 @@ propres à une plateforme.
 | Skill | Rôle | Claude | Codex |
 |---|---|:---:|:---:|
 | [`grill-me`](skills/shared/grill-me/) | Interroge sans relâche sur un plan ou une conception jusqu'à compréhension partagée | ✓ | ✓ |
-| [`std-dev-project`](skills/codex/std-dev-project/) | Livre un projet par un cycle v4 en cinq étapes, avec baselines automatiques, six documents canoniques, revues bornées et CI/PR itérative | — | ✓ |
-| [`std-dev-project`](skills/claude/std-dev-project/) | Version native Claude Code du précédent : mêmes étapes, gates et documents, portés sur le suivi de tâches, le mode plan et la délégation | ✓ | — |
+| [`std-dev-project`](skills/codex/std-dev-project/) | Livre un projet par un cycle v4 en cinq étapes, avec baselines automatiques, six documents canoniques, lots délégués à des sous-agents, revues bornées et CI/PR itérative | — | ✓ |
+| [`std-dev-project`](skills/claude/std-dev-project/) | Version native Claude Code du précédent : mêmes étapes, gates et documents, portés sur le suivi de tâches, le mode plan et l'outil Agent | ✓ | — |
 | [`claude-independent-review`](skills/codex/claude-independent-review/) | Fait intervenir Claude comme reviewer indépendant en lecture seule, Codex gardant l'arbitrage | — | ✓ |
 | [`codex-independent-review`](skills/claude/codex-independent-review/) | Miroir du précédent : Codex devient le reviewer en lecture seule, Claude Code gardant l'arbitrage | ✓ | — |
 | [`plan-delegate-verify`](skills/codex/plan-delegate-verify/) | Planifie des lots indépendants, les délègue à des sous-agents calibrés et vérifie chaque résultat sur preuves | — | ✓ |
