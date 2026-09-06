@@ -13,6 +13,7 @@ import json
 import os
 import queue
 import re
+import secrets
 import signal
 import shutil
 import stat
@@ -24,7 +25,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Iterator, Sequence
 
 
 SCHEMA_VERSION = 1
@@ -1446,6 +1447,47 @@ def _stream_activity(event: dict[str, Any]) -> tuple[bool, list[str]]:
     return is_turn, tools
 
 
+def _create_sandbox_visible_directory(prefix: str) -> Path:
+    """Crée un répertoire temporaire lisible par le bac à sable Codex.
+
+    Sous Windows, `tempfile.mkdtemp` (CPython 3.12 et suivants) pose une ACL
+    réduite à SYSTEM, aux administrateurs et aux « droits du propriétaire » :
+    le jeton restreint sous lequel Codex exécute la revue ne peut alors ni lire
+    l'instantané ni écrire le rapport, et la revue revient vide sur un « Accès
+    refusé » (constaté le 5 septembre 2026, trois revues perdues). Le
+    répertoire est donc créé avec le mode par défaut, dont l'ACL est héritée du
+    répertoire temporaire et accorde l'accès à l'utilisateur courant. Le nom
+    reste imprévisible.
+    """
+    base = Path(tempfile.gettempdir())
+    for _ in range(100):
+        candidate = base / f"{prefix}{secrets.token_hex(8)}"
+        try:
+            candidate.mkdir()
+        except FileExistsError:
+            continue
+        return candidate
+    raise ReviewError(f"Impossible de créer un répertoire temporaire {prefix}* dans {base}")
+
+
+@contextlib.contextmanager
+def sandbox_visible_temporary_directory(prefix: str) -> Iterator[str]:
+    """Équivalent de `tempfile.TemporaryDirectory` visible par le bac à sable Codex.
+
+    Hors Windows, `TemporaryDirectory` (mode 0o700) reste la règle : le bac à
+    sable y tourne sous l'utilisateur courant, propriétaire du répertoire.
+    """
+    if os.name != "nt":
+        with tempfile.TemporaryDirectory(prefix=prefix) as name:
+            yield name
+        return
+    directory = _create_sandbox_visible_directory(prefix)
+    try:
+        yield str(directory)
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
 def invoke_codex(
     codex_command: str,
     snapshot: Snapshot,
@@ -1456,7 +1498,7 @@ def invoke_codex(
     reporter = reporter or ProgressReporter(False)
     reporter.emit("codex", "checking_cli", model=policy.model, effort=policy.effort)
     diagnostic = doctor(codex_command)
-    with tempfile.TemporaryDirectory(prefix="codex-review-output-") as output_directory:
+    with sandbox_visible_temporary_directory("codex-review-output-") as output_directory:
         last_message_path = Path(output_directory) / "report.md"
         command = [
             diagnostic["codex"],
@@ -1487,6 +1529,12 @@ def invoke_codex(
             'web_search="disabled"',
             "-",
         ]
+        if os.name == "nt":
+            # Sans bac à sable déclaré, Codex refuse sous Windows toute commande
+            # en read-only avec approval_policy="never" : chaque lecture est
+            # rejetée et la revue revient vide. Le bac à sable Windows non élevé
+            # (jeton restreint) conserve l'interdiction d'écriture.
+            command[-1:-1] = ["-c", 'windows.sandbox="unelevated"']
         bypass = sorted(FORBIDDEN_HELP_FLAGS.intersection(command))
         if bypass:
             raise ReviewError("Refus de lancer une revue avec un contournement du bac à sable : " + ", ".join(bypass))
@@ -1815,7 +1863,7 @@ def command_review(arguments: argparse.Namespace, skill_root: Path) -> dict[str,
         project_root,
         arguments.milestone,
         enabled=arguments.sdp_authorized,
-    ) as authorization_session, tempfile.TemporaryDirectory(prefix="codex-independent-review-") as temporary_name:
+    ) as authorization_session, sandbox_visible_temporary_directory("codex-independent-review-") as temporary_name:
         if authorization_session is not None:
             authorization = authorization_session["authorization"]
         reporter.emit("snapshot", "started")

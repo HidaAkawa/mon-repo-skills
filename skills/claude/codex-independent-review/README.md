@@ -143,6 +143,15 @@ l'exécutable `codex` n'est pas dans le `PATH` — c'est le cas d'une installati
 Windows par défaut — le runner le cherche aussi dans ses emplacements usuels, et
 l'option `--codex <chemin>` permet toujours de le désigner explicitement.
 
+Deux particularités Windows sont prises en charge par le runner lui-même.
+Il demande le bac à sable Windows non élevé (`windows.sandbox="unelevated"`),
+sans lequel Codex refuse toute lecture en `read-only` avec
+`approval_policy="never"`. Et il crée l'instantané ainsi que le dossier du
+rapport avec l'ACL héritée du répertoire temporaire : `tempfile.mkdtemp` de
+Python 3.12 pose une ACL réservée à SYSTEM et aux administrateurs, que le
+jeton restreint de Codex ne peut pas lire — les revues revenaient vides sur
+un « Accès refusé » jusqu'au correctif du 6 septembre 2026.
+
 La découverte des modèles peut être vérifiée séparément :
 
 ```text
