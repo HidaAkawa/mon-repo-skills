@@ -16,7 +16,7 @@ propres à une plateforme.
 | [`std-dev-project`](skills/claude/std-dev-project/) | Version native Claude Code du précédent : mêmes étapes, gates et documents, portés sur le suivi de tâches, le mode plan et l'outil Agent | ✓ | — |
 | [`claude-independent-review`](skills/codex/claude-independent-review/) | Fait intervenir Claude comme reviewer indépendant en lecture seule, Codex gardant l'arbitrage | — | ✓ |
 | [`codex-independent-review`](skills/claude/codex-independent-review/) | Miroir du précédent : Codex devient le reviewer en lecture seule, Claude Code gardant l'arbitrage | ✓ | — |
-| [`plan-delegate-verify`](skills/codex/plan-delegate-verify/) | Planifie des lots indépendants, les délègue à des sous-agents calibrés et vérifie chaque résultat sur preuves | — | ✓ |
+| [`plan-delegate-verify`](skills/codex/plan-delegate-verify/) | Orchestre en boucle persistante des lots indépendants, leur routage, leur délégation, leur vérification et la replanification jusqu'au résultat global | — | ✓ |
 | [`plan-delegate-verify`](skills/claude/plan-delegate-verify/) | Version native Claude Code du précédent : mêmes lots, délégation et vérification, portés sur l'outil Agent | ✓ | — |
 
 Trois skills existent en **deux variantes de même nom**, une par plateforme.

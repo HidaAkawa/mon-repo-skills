@@ -1,4 +1,4 @@
 interface:
   display_name: "Plan, Delegate, Verify"
-  short_description: "Cost-aware parallel work with adversarial QA"
-  default_prompt: "Use $plan-delegate-verify to plan, budget, delegate, and adversarially verify this task with cost-aware subagents."
+  short_description: "Persistent cost-aware multi-agent orchestration"
+  default_prompt: "Use $plan-delegate-verify to orchestrate this objective persistently: plan, route, delegate, verify, integrate, measure, and re-plan until completion or a concrete blocker."

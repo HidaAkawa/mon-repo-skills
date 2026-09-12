@@ -1,213 +1,215 @@
 ---
 name: plan-delegate-verify
-description: Orchestrate substantial, decomposable work through a cost-aware plan-delegate-verify workflow that defines independent work lots and verifiable completion criteria, budgets agent turns, routes each lot dynamically across available Codex models and reasoning efforts, executes in parallel within actual concurrency limits, and adversarially verifies deliverables with targeted escalation. Use only when the user explicitly asks to “plan, delegate, and verify,” “orchestrate this task with subagents,” “use parallel agents,” « planifie, délègue et vérifie », « orchestre cette tâche avec des sous-agents », or otherwise explicitly requests multi-agent orchestration. Do not trigger merely because a task is large.
+description: >
+  Persistently orchestrate substantial or long-running work through a recursive,
+  cost-aware Plan → Delegate → Verify → Re-plan loop. Once explicitly activated,
+  keep this workflow active until the user's global objective is DONE, BLOCKED,
+  CANCELLED, or redirected. Delegate material execution, route each lot to the
+  cheapest suitable model and reasoning effort, verify results with evidence,
+  escalate only when needed, and continuously re-plan after each material wave.
 ---
 
-# Plan, Delegate, Verify
+# Persistent Plan, Delegate, Verify
 
-Orchestrate complex work in three phases: create a testable plan, delegate independent lots to calibrated agents, and verify every result against evidence. Keep ownership of the overall outcome; agents execute bounded lots rather than replacing orchestration.
+Use this skill only when the user explicitly requests multi-agent orchestration,
+for example “plan, delegate, and verify”, “use subagents”, or equivalent wording.
 
-## Gate the workflow
+Once activated, this skill applies to the **entire global objective**. Do not
+silently stop using it after the first plan, first wave, milestone, context
+compaction, or initial agent budget.
 
-Use this workflow only for a task with at least two material work streams that can run independently or in dependency-ordered waves. Prefer direct execution for short, tightly coupled, sequential, or single-voice creative work.
+## Non-negotiable loop
 
-When an explicitly requested orchestration is unsuitable, do not silently skip the requested workflow. Start the response with: `Orchestration note: this task is too small or tightly coupled to benefit from subagents.` Then execute it directly unless the user insists on delegation or explicitly asks for no explanation.
+For as long as the objective is not `DONE`, `BLOCKED`, or `CANCELLED`:
 
-## Phase 1 — Plan
+1. **ASSESS** verified progress and remaining work.
+2. **PLAN** the next bounded execution horizon.
+3. **ROUTE** each material lot to the cheapest reliable model/effort.
+4. **DELEGATE** material execution to child agents.
+5. **VERIFY** every material result against evidence.
+6. **INTEGRATE** verified outputs and invalidate stale evidence if needed.
+7. **RE-PLAN** before starting further material work.
 
-### Resolve the specification
+After every material execution wave, `VERIFY → UPDATE STATE → RE-PLAN` is
+mandatory.
 
-Inspect available files, tools, repository guidance, and other discoverable facts before asking the user. Ask only for decisions that cannot be inferred safely and that would materially change the result.
+The orchestrator owns planning, routing, dependency management, integration,
+verification strategy, escalation, telemetry, and final accountability.
+Material execution remains delegated except for trivial glue, deterministic
+checks, tiny mechanical corrections, or work that cannot technically be
+delegated.
 
-Define:
+Do not absorb remaining work merely because only a few tasks remain.
 
-- the objective and scope;
-- constraints and non-goals;
-- expected artifacts or changes;
-- acceptance criteria for the complete task;
-- any sensitive, destructive, or external actions requiring approval.
+## Rolling-horizon planning
 
-### Discover orchestration capacity
+Do not create a speculative many-hour implementation plan unless dependencies
+are unusually stable.
 
-Read the active collaboration tool contract before assigning agents. Identify:
+Maintain a high-level roadmap, but plan detailed lots only far enough ahead to
+create a useful next execution horizon.
 
-- the available agent model overrides and their declared capability profiles;
-- the available reasoning-effort levels;
-- the current active-agent limit and occupied slots;
-- whether explicit model or effort selection requires a particular context-fork setting.
+For every material lot define:
 
-Never invent a model identifier or effort level. When model profiles cannot be ranked confidently, inherit the session configuration and state that limitation in the plan.
+- mission;
+- exact inputs and relevant predecessor outputs;
+- write scope;
+- 2–4 observable done criteria;
+- dependencies;
+- routing profile;
+- verification route;
+- risk: `standard | demanding | critical`.
 
-### Select planning and verification capacity
+Prevent concurrent agents from modifying overlapping resources unless explicitly
+safe.
 
-Plan locally with the orchestrator by default. Do not spawn a planner merely because the orchestrator's exact model or effort cannot be proven.
+## Discover runtime capabilities
 
-Spawn a fresh planning agent only when at least one condition holds:
+Before routing, inspect the collaboration tool contract and determine:
 
-- the task is high-consequence or difficult to reverse;
-- ambiguity spans several lots or acceptance criteria remain hard to define;
-- the dependency graph requires several waves or long-horizon reasoning;
-- the orchestrator's first planning pass cannot produce independent lots with testable criteria.
+- available child-agent models and declared profiles;
+- supported reasoning-effort levels;
+- concurrency limits and occupied slots;
+- clean-context / fork requirements;
+- relevant file/tool access.
 
-Use the strongest suitable model at `high` effort for that planner. Raise to `xhigh` only when the planning problem itself requires especially deep reasoning and a bad plan would make downstream rework materially more expensive. Use `fork_turns: "none"`, pass a self-contained brief, and review and own the proposed plan.
+Never invent model names, effort levels, concurrency, tokens, or credits.
 
-Do not interrupt or rush a planning agent merely to reduce latency or begin execution sooner. Waiting for a substantive planning result is part of this phase, not avoidable orchestration overhead.
+Build a capability ladder dynamically from the current runtime, conceptually:
 
-### Divide work into lots
+`efficient → balanced → strong → frontier`
 
-Create the fewest useful lots. Make each lot independently executable and independently verifiable. Merge lots that need to edit the same lines or make tightly coupled decisions; otherwise sequence them in dependency-ordered waves.
+Treat model capability and reasoning effort as separate dimensions.
 
-For every lot, record:
+For detailed routing and escalation rules, read
+`references/routing.md` **only when needed**.
 
-1. **Mission** — one action-oriented sentence.
-2. **Inputs** — exact files, data, links, tools, and assumptions.
-3. **Write scope** — exact files or artifacts the agent may create or edit.
-4. **Done criteria** — two to four observable pass/fail checks.
-5. **Dependencies** — predecessor lots or `none`.
-6. **Routing** — selected model and effort with a short reason.
-7. **Risk** — standard or critical, with the reason for criticality.
+## Routing objective
 
-Prevent concurrent agents from editing overlapping files. Assign one owner, divide disjoint ranges or files, or serialize the dependent work. Preserve pre-existing user changes.
+Choose the route that minimizes expected total cost, not merely first-call cost:
 
-### Enforce the planning exit gate
+`execution + verification + P(failure) × rework + P(undetected failure) × consequence`
 
-Do not enter delegation until the orchestrator has reviewed the plan and all of these conditions hold:
+Prefer the weakest configuration expected to pass reliably, but use a stronger
+first pass when cheap failure would invalidate expensive downstream work.
 
-- every lot contains all seven required fields;
-- dependencies, execution waves, and write scopes are mutually consistent;
-- every done criterion is observable and sufficient to establish the lot's contribution to the complete task;
-- material planning uncertainties are resolved or explicitly disclosed as blockers;
-- the complete plan, routing, and agent-turn budget are ready to present to the user.
+Do not route all lots to one model by default.
 
-If a planner appears to over-analyze after covering these conditions, ask for a structured synthesis against the exit gate. Identify any still-missing field or decision precisely. Do not ask the planner to conclude merely because planning is taking time, and do not treat the desire to start execution as evidence that the gate has passed.
+## Delegation
 
-### Set an agent-turn budget
+Use dependency-aware waves and parallelize only independent work.
 
-Classify the overall task as standard, demanding, or critical. Let `N` be the number of execution lots and count every spawn or follow-up as one child-agent turn.
+Executor prompts must be self-contained and include:
 
-- **Standard:** budget at most `N + 1` child-agent turns; use no dedicated planner or verifier and do not explicitly pin `xhigh`.
-- **Demanding:** budget at most `N + min(2, N) + 1` turns; use at most one dedicated planner or verifier and at most one `xhigh` child turn.
-- **Critical:** budget at most `N + min(2, N) + 2` turns; use at most one planner, one batched verifier, and two `xhigh` child turns.
+- mission;
+- exact inputs / source paths;
+- allowed write scope;
+- done criteria;
+- constraints and relevant repository instructions;
+- required evidence / tests;
+- instruction to preserve unrelated user changes;
+- instruction not to spawn further subagents.
 
-These limits bound orchestration overhead, not executor quality. Route every initial execution lot strongly enough to minimize expected total cost, including use of the strongest suitable model at `high` when justified. State the budget in the plan. Spend the reserve only on failed criteria or evidence gaps, not general polishing. When the budget is exhausted, complete the correction or verification locally when safe; otherwise obtain user approval before adding child-agent turns. Never stop with a required criterion silently unverified.
+Prefer fresh child contexts when supported and useful for routing.
 
-### Route dynamically
+## Verification
 
-Rank only the models exposed by the current tool contract. Minimize expected total cost: `first-pass cost + failure probability × downstream rework cost`. Prefer a stronger first pass when a cheap failure would invalidate dependent lots or require expensive repetition.
+Treat every executor response as a claim until checked.
 
-| Lot profile | Starting route |
-|---|---|
-| Mechanical, deterministic, easily checked | Fast or efficient model; low effort |
-| Standard analysis, bounded code, structured writing | Cost-aware automatic routing when explicitly supported; otherwise balanced model at medium effort |
-| Ambiguous, nuanced, multi-step, or costly to redo | Balanced model at high effort or strongest suitable model at medium/high effort |
-| Critical, high-risk, or on the dependency bottleneck | Strongest suitable model at high effort; use xhigh only for especially deep reasoning |
+Use deterministic evidence first: tests, lint, typecheck, builds, diffs, runtime
+probes, queries, calculations, schema validation, rendered outputs, or equivalent.
 
-Treat these as capability profiles, not fixed model names. Leave model and effort unpinned only when the active platform explicitly provides cost-aware automatic routing; otherwise select the efficient or balanced profile directly. Prefer a domain-specialized model when its declared profile is a better fit. Do not upgrade solely because the input is large when the work and criteria are mechanical.
+Use semantic verification only when deterministic evidence is insufficient.
+When economically justified, use an independent verifier with stronger
+capability than the executor. Batch compatible verification when it remains
+clear and independently attributable.
 
-### Present and advance the plan
+For detailed verification policy, read
+`references/verification.md` **only when needed**.
 
-Show the lot plan and routing before delegation. Continue automatically unless:
+Every required criterion must end as `PASS`, `FAIL`, or `BLOCKED` with evidence.
 
-- an unresolved decision materially changes the result;
-- the next action is destructive, sensitive, or externally consequential;
-- the user requested plan approval;
-- applicable instructions require approval.
+## Failure handling
 
-Use the plan-tracking mechanism when available and keep at most one orchestration step marked in progress.
+Diagnose before escalating:
 
-## Phase 2 — Delegate
+- specification/input failure → fix specification/input; do not upgrade blindly;
+- narrow instruction miss → retry same model and effort with failure evidence;
+- reasoning-depth failure → raise effort one supported step;
+- capability failure → raise model capability one step;
+- context failure → use a fresh context before upgrading.
 
-### Build autonomous prompts
+Change one dimension at a time unless evidence clearly justifies more.
 
-Use `fork_turns: "none"` for executors so model and effort routing remains available and irrelevant conversation history is excluded. Pass the selected model and effort when routing is explicit; omit them only for a supported automatic route. Make each prompt self-contained. Include:
+Allow at most two targeted rework attempts for the same diagnosed failure mode
+before re-planning the lot or decomposition.
 
-- the mission;
-- absolute input paths or exact source identifiers;
-- the allowed write scope;
-- the done criteria;
-- the required output or handoff format;
-- relevant constraints and repository instructions;
-- a warning to preserve unrelated user changes;
-- an instruction not to spawn further subagents;
-- an instruction to return the actual deliverable or exact artifact paths plus test evidence, not a generic summary.
+Material failure is also a re-planning trigger when it changes assumptions,
+dependencies, architecture, or downstream validity.
 
-Do not leak the expected answer, hidden evaluation conclusions, or another executor’s reasoning into the prompt.
+## Cycle-local budgets
 
-### Execute in waves
+For long objectives, agent-turn budgets are per cycle, not global.
 
-Launch no executor until the planning exit gate has passed and the lot plan has been presented.
+A new re-planning cycle receives a new local budget. Maintain cumulative counts
+for reporting, but never interpret exhaustion of one cycle budget as permission
+for the orchestrator to execute all remaining work directly.
 
-Launch independent lots concurrently, up to the actual free-agent capacity. Account for the orchestrator in limits that include it. When lots exceed capacity, run dependency-aware waves and reuse freed slots.
+## Persistent state
 
-Keep delegation centralized. Do not duplicate an executor’s work while it runs. Perform only orchestration, dependency preparation, or unrelated integration work.
+Maintain a compact orchestration ledger containing:
 
-Track agents and wait efficiently for results. Send concise progress updates during long runs without narrating unchanged status.
+- global objective and acceptance criteria;
+- verified milestones;
+- current lots and dependencies;
+- material discoveries / changed assumptions;
+- relevant artifacts and verification evidence;
+- routing / retry / escalation history;
+- remaining objective.
 
-### Collect evidence
+At epoch boundaries compact the ledger rather than carrying full child-agent
+transcripts forward.
 
-Treat agent messages as claims until checked. Record for each lot:
+## Telemetry
 
-- produced or changed artifacts;
-- tests or checks the executor ran;
-- unresolved assumptions or blockers;
-- the exact agent configuration used.
+Record every child-agent planner, executor, verifier, retry, and replacement
+through `scripts/telemetry.py` when writable temporary storage is available.
+Keep telemetry outside the user's repository unless explicitly requested.
 
-## Phase 3 — Verify
+Telemetry must track routing behavior without inflating the model context.
 
-### Verify adversarially
+For the schema, commands, metrics, anomaly rules, and final audit format, read
+`references/telemetry.md` **when initializing telemetry, when diagnosing routing,
+or when producing a usage report**.
 
-Check every done criterion against primary evidence. Inspect produced files, recalculate values, compare against sources, run relevant tests, and open rendered outputs when layout matters. Never accept “looks good” or the executor’s summary as proof.
+Never estimate platform token/credit usage. Record it only if explicitly exposed
+by the runtime.
 
-For each criterion, record:
+## Mandatory continuation gate
 
-- `PASS` with the evidence that proves it;
-- `FAIL` with the observed mismatch;
-- `BLOCKED` with the missing authority, input, or external state.
+After every material wave ask:
 
-Try to falsify the deliverable: ask what observable evidence would prove the criterion failed, then perform that check.
+**Are all global acceptance criteria satisfied by verified evidence?**
 
-### Add independent verification when warranted
+- If `NO`: the next material action is `RE-PLAN`, not local implementation.
+- If `YES`: run final system-level verification against the original objective.
+- If final verification finds missing material work: return to
+  `ASSESS → PLAN → ROUTE → DELEGATE → VERIFY`.
 
-Have the orchestrator perform the baseline verification for every lot. Do not spawn an independent verifier merely because a lot was reworked.
+## Completion
 
-Spawn a fresh independent verifier only when:
+Terminate only as:
 
-- a failure could cause serious data loss, security exposure, financial harm, unsafe behavior, or an irreversible external effect;
-- the orchestrator cannot verify a critical criterion from primary evidence with high confidence;
-- sources or verification results materially conflict.
+- `DONE`: every global acceptance criterion has verified evidence;
+- `BLOCKED`: a concrete missing dependency, authority, resource, external state,
+  or user decision prevents further progress;
+- `CANCELLED`: the user explicitly stops or redirects the objective.
 
-Batch compatible critical lots into one verifier turn when the combined context remains clear. Use the strongest suitable model at `high` effort by default. Raise to `xhigh` only when the verification itself requires especially deep reasoning. Use `fork_turns: "none"`.
+At termination, produce the actual outcome first, then a concise Routing Audit
+from telemetry. If exact token/credit data was unavailable, say so explicitly.
 
-Give the verifier the specification, artifacts, sources, and criteria, but omit the executor’s rationale and the orchestrator’s tentative verdict. Ask for criterion-by-criterion findings with evidence. Adjudicate conflicts by checking primary evidence directly.
+The persistent operating invariant is:
 
-### Rework failures
-
-Allow at most two targeted rework attempts per lot.
-
-Diagnose the failure before spending another child-agent turn:
-
-- **Specification or input failure:** correct the specification, dependency, or source first; do not upgrade the model.
-- **Narrow instruction miss:** follow up with the same agent and configuration using the failed criterion and evidence.
-- **Insufficient reasoning depth:** keep the model and raise effort by one supported level.
-- **Capability or context mismatch:** switch to the next more capable suitable model with enough effort.
-
-Use the smallest intervention that addresses the diagnosed cause. On the second rework, escalate one dimension only unless evidence shows that both model capability and reasoning depth were inadequate. Spawn a fresh replacement only when changing configuration, obtaining a fresh context, or replacing a failed agent is materially useful.
-
-After two failed reworks, complete the lot directly when safe and feasible; otherwise report the concrete blocker. Do not hide an unresolved failure.
-
-Apply a narrow, purely mechanical correction directly when a new agent round would be disproportionate. Record the correction and verify it afterward.
-
-Re-run affected tests and re-check downstream lots after every correction.
-
-## Report the outcome
-
-Return the result in the user’s language. Lead with the outcome, then state:
-
-- what was produced or changed, with exact paths or links;
-- which verification checks passed and the supporting evidence;
-- which lots were reworked and how routing escalated;
-- the planned and consumed child-agent-turn budget, including strongest-model or xhigh turns;
-- any remaining blocked or open item;
-- any dynamic-routing limitation encountered.
-
-Never claim completion while a required criterion is failed, blocked without disclosure, or unverified.
+> **Assess → Plan → Route → Delegate → Verify → Integrate → Measure → Re-plan**
+>
+> until the complete user objective is demonstrably finished.
