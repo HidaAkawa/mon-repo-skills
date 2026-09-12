@@ -17,7 +17,7 @@ propres à une plateforme.
 | [`claude-independent-review`](skills/codex/claude-independent-review/) | Fait intervenir Claude comme reviewer indépendant en lecture seule, Codex gardant l'arbitrage | — | ✓ |
 | [`codex-independent-review`](skills/claude/codex-independent-review/) | Miroir du précédent : Codex devient le reviewer en lecture seule, Claude Code gardant l'arbitrage | ✓ | — |
 | [`plan-delegate-verify`](skills/codex/plan-delegate-verify/) | Orchestre en boucle persistante des lots indépendants, leur routage, leur délégation, leur vérification et la replanification jusqu'au résultat global | — | ✓ |
-| [`plan-delegate-verify`](skills/claude/plan-delegate-verify/) | Version native Claude Code du précédent : mêmes lots, délégation et vérification, portés sur l'outil Agent | ✓ | — |
+| [`plan-delegate-verify`](skills/claude/plan-delegate-verify/) | Version native Claude Code du précédent : même boucle persistante, budgets par cycle et télémétrie, portés sur l'outil Agent, `SendMessage` et un routage à un seul axe (tier de modèle) | ✓ | — |
 
 Trois skills existent en **deux variantes de même nom**, une par plateforme.
 Elles ne se marchent jamais dessus à l'installation : `skills/codex/` va dans
