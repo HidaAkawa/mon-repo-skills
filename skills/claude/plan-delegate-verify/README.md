@@ -1,76 +1,92 @@
-# `plan-delegate-verify`
+# `plan-delegate-verify` (Claude Code, v3)
 
-**Compatibilité : Claude Code uniquement.** Aucun prérequis externe : le skill
-s'appuie sur l'outil Agent de Claude Code et son suivi de tâches, disponibles
-dans la session.
+**Compatibility: Claude Code only.** No external prerequisite: the skill relies
+on the Agent tool, `SendMessage`, task tracking, and optionally Python 3 for
+telemetry, all available in the session.
 
-Orchestre les travaux substantiels et décomposables selon une boucle stricte :
-planifier des lots vérifiables, les déléguer à des sous-agents calibrés, puis
-contrôler chaque résultat contre des preuves primaires.
+Native Claude counterpart of the Codex skill of the same name and version.
+Structure, loop, and rigor are identical; only platform mechanics differ.
 
-Version native Claude du skill Codex du même nom : structure et rigueur
-identiques ; seule la mécanique propre à la plateforme change (modèles nommés de
-l'outil Agent, spawn frais plutôt que fork, relance par message, suivi de tâches).
+## What changed in v3
 
-## Utilisation
+The skill is no longer a one-shot three-phase workflow. Once explicitly
+activated it stays in charge of the **whole objective** through a persistent
+loop:
 
-Le skill ne se déclenche que sur une demande explicite d'orchestration
-multi-agent, par exemple :
+> Assess → Plan → Route → Delegate → Verify → Integrate → Measure → Re-plan
+
+until the objective is `DONE`, `BLOCKED`, or `CANCELLED`. After every material
+wave a continuation gate forces a re-plan; the orchestrator never absorbs the
+remaining work, even when a cycle budget is exhausted or two reworks failed.
+
+## Trigger
+
+Only on an explicit request for multi-agent orchestration, for example:
 
 ```text
-Planifie, délègue et vérifie cette migration avec des sous-agents.
+Plan, delegate, and verify this migration with subagents.
 ```
 
 ```text
-Utilise des agents en parallèle pour réaliser cette tâche et vérifier le résultat.
+Planifie, délègue et vérifie cette tâche avec des agents en parallèle.
 ```
 
-Une tâche courte, séquentielle ou trop couplée reste exécutée directement. Le
-skill l'annonce au lieu de créer artificiellement des sous-tâches.
+A short, sequential, or tightly coupled task is executed directly, with an
+explicit `Orchestration note` instead of artificial lots.
 
-## Workflow
+## Claude Code mechanics
 
-1. **Planifier** — résoudre les faits disponibles, définir les critères
-   d'acceptation et découper le travail en un nombre minimal de lots autonomes.
-2. **Déléguer** — choisir pour chaque lot un modèle adapté au coût d'un échec,
-   puis exécuter les lots indépendants en parallèle dans la limite de la capacité
-   réelle.
-3. **Vérifier** — traiter les comptes rendus des agents comme des affirmations,
-   contrôler chaque critère sur des preuves, et corriger uniquement les échecs
-   démontrés.
+| Concern | Codex v3 | Claude v3 |
+|---|---|---|
+| Routing axes | model capability + reasoning effort | **model tier only** (`haiku → sonnet → opus → fable`) |
+| Rework ladder | retry → effort up → model up → fresh context | fix spec → `SendMessage` same agent → fresh spawn same tier → fresh spawn next tier |
+| Budget | per cycle, no top-tier cap | per cycle, formulas `N+1` / `N+min(2,N)+1` / `N+min(2,N)+2` with an `opus`/`fable` cap |
+| Planner | unspecified | fresh `Plan` agent at start under conditions, or on assumption rupture |
+| Verifier | one class above executor when semantic | Claude triggers (critical, unverifiable, conflicting) with one tier above executor |
+| State | in-context ledger | `ledger.md` file in the session scratchpad, re-read after context compaction |
+| Telemetry | JSONL in system temp | JSONL in session scratchpad, no effort or token fields, `rework_mode` and `subagent_type` added |
+| Executor spawn | fresh context when supported | always fresh, never `fork` |
+| `Workflow` tool | n/a | **excluded** in this version |
 
-Chaque lot précise sa mission, ses entrées, son périmètre d'écriture, ses
-critères de fin, ses dépendances, son routage et son niveau de risque. Deux
-agents ne modifient jamais simultanément les mêmes fichiers.
-
-## Budget et routage
-
-Le skill borne le nombre de tours d'agents selon la difficulté globale. Il
-privilégie le coût total attendu — première exécution et risque de reprise —
-plutôt que le modèle le moins cher à chaque appel.
-
-Le routage a **un seul axe** : le tier de modèle exposé par l'outil Agent
-(`haiku`, `sonnet`, `opus`, `fable`). Claude Code n'exposant pas de niveau
-d'effort par sous-agent, l'escalade se fait en montant d'un tier. Un jeu de
-modèles réduit ou différent est hérité de la session et signalé dans le plan ;
-aucun identifiant de modèle n'est inventé.
-
-## Garanties
-
-- Aucun agent ne remplace la responsabilité de l'orchestrateur.
-- Les prompts délégués sont autonomes et bornent précisément les écritures.
-- Les résultats sont vérifiés critère par critère avec `PASS`, `FAIL` ou
-  `BLOCKED`.
-- Les reprises sont ciblées, diagnostiquées et limitées à deux par lot.
-- Une vérification indépendante supplémentaire est réservée aux risques
-  critiques ou aux preuves contradictoires.
-- Aucun résultat n'est déclaré terminé tant qu'un critère requis reste non
-  vérifié ou bloqué sans explication.
-
-## Contenu
+## Layout
 
 ```text
 plan-delegate-verify/
-├── SKILL.md
-└── README.md
+├── SKILL.md                    # the loop, always loaded
+├── README.md
+├── references/
+│   ├── routing.md              # read on non-obvious routing or lot failure
+│   ├── verification.md         # read when deterministic evidence is insufficient
+│   └── telemetry.md            # read at telemetry init, diagnosis, final audit
+└── scripts/
+    └── telemetry.py            # stdlib-only JSONL recorder and report
 ```
+
+## Telemetry quick start
+
+```bash
+python ~/.claude/skills/plan-delegate-verify/scripts/telemetry.py init --dir <scratchpad>
+python ~/.claude/skills/plan-delegate-verify/scripts/telemetry.py record --file <path> --cycle 1 --lot L1 --role executor --model sonnet --result PASS --material yes
+python ~/.claude/skills/plan-delegate-verify/scripts/telemetry.py report --file <path>
+```
+
+The report flags under-routing, over-routing, orchestration collapse, rework
+discipline breaches, and top-tier cap overruns. It never estimates tokens or
+credits: the Agent tool does not expose them.
+
+## Guarantees
+
+- No agent replaces the orchestrator's accountability.
+- Delegated prompts are self-contained and bound their write scope exactly.
+- Every required criterion ends as `PASS`, `FAIL`, or `BLOCKED` with evidence.
+- Reworks are diagnosed, one dimension at a time, at most two per failure mode.
+- Material work is never completed by the orchestrator; direct executions are
+  recorded and visible in the audit.
+- Nothing is declared `DONE` while a required criterion is unverified.
+
+## Later
+
+The Claude Code `Workflow` tool (scripted parallel agents with structured
+output) is a candidate for running purely parallel waves once telemetry has
+stabilized. It is deliberately out of scope for v3 because it does not support
+per-lot `SendMessage` rework or adaptive routing inside a wave.
