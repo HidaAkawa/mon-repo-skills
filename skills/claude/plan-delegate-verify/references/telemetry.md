@@ -1,4 +1,4 @@
-# Routing Telemetry Reference (Claude Code)
+# Routing Telemetry Reference (Claude Code, v4)
 
 Telemetry audits whether persistent delegation and adaptive routing actually
 work, without keeping large histories in model context.
@@ -28,6 +28,18 @@ python <skill>/scripts/telemetry.py record --file <path> \
   --material yes --verification deterministic
 ```
 
+Record each turn twice with the same key (cycle, lot, role, model, rework
+mode): `--phase open` at spawn and `--phase close` with the result. The report
+merges the pair into one turn. A single event without phase is one atomic
+turn.
+
+```bash
+python <skill>/scripts/telemetry.py record --file <path> --cycle 2 --lot L5 --phase open \
+  --role executor --model opus --risk critical --material yes --exclusive host:srv1116117
+python <skill>/scripts/telemetry.py record --file <path> --cycle 2 --lot L5 --phase close \
+  --role executor --model opus --risk critical --material yes --result PASS --verification deterministic
+```
+
 Use `--help` for the complete command schema.
 
 ## Required events
@@ -46,18 +58,34 @@ Roles:
 Results:
 `PASS | FAIL | BLOCKED | CANCELLED | UNKNOWN`
 
+With `--result BLOCKED`, add `--block-kind` among
+`permission | dependency | user-decision | external | other`; `permission`
+gives the lot status `BLOCKED-PERMISSION` in the report.
+
+Orchestrator material executions require `--exec-class`:
+- `authorized` with `--exec-reason single-browser | user-gate | non-delegable-tool | trivial-glue`,
+  for a lot declared in the plan as orchestrator-executed;
+- `fallback` for any other orchestrator execution of delegable work.
+
+Exclusive resources: `--exclusive <resource>` on the open event of the lot that
+holds it (repeatable); `--writes <resource>` on any turn that writes to a
+shared resource. Name resources stably, for example `demarches-app:main`,
+`host:srv1116117`, `release:content`.
+
 Models: exactly the `model` value passed to the Agent tool (`haiku`, `sonnet`,
 `opus`, `fable`). The script derives the capability tier automatically; pass
 `--capability` only for a model it does not know.
 
 Rework modes (`--rework-mode`), one per rework or replacement event:
-`sendmessage | fresh_same_tier | tier_up | spec_fix`
+`sendmessage | fresh_same_tier | tier_up | spec_fix | reword`
+(`reword` = the spawn was refused by the classifier and re-issued with a
+reworded prompt).
 
 For escalations, record:
 - `--initial-model`;
 - `--escalation-from` and `--escalation-to` (model names);
 - `--escalation-reason` among
-  `instruction_miss | context_failure | capability_failure | specification_failure | other`.
+  `instruction_miss | context_failure | capability_failure | specification_failure | permission_block | other`.
 
 There is no `--effort` field. The Agent tool exposes no reasoning-effort
 control and no token or credit usage; never estimate or record them.
@@ -80,8 +108,15 @@ The report exposes:
 - first-pass success rate, overall and by initial model;
 - retry rate and rework-mode distribution;
 - escalation rate and escalation matrix;
-- delegation continuity by cycle;
-- orchestrator material-execution events;
+- delegation continuity, computed over cycles that require delegation (a
+  cycle whose only material work is authorized orchestrator execution is
+  excluded from the denominator and listed separately);
+- orchestrator material-execution events by class (`authorized`, `fallback`,
+  `unclassified` for legacy files) and by reason;
+- per-cycle top-tier turns against the cap `max(2, C + 1)`;
+- lot statuses, `BLOCKED` by kind, `BLOCKED-PERMISSION` lots;
+- exclusive resources held and any write on a held resource;
+- merged open/close pairs;
 - top-tier (`opus`/`fable`) share of child turns.
 
 ## Routing diagnostics
@@ -99,9 +134,17 @@ Interpret telemetry; do not merely print numbers.
   criterion.
 
 ### Possible orchestration collapse
-- later material cycles without executor delegation;
-- any orchestrator material-execution event;
+- later material cycles without executor delegation, excluding cycles made
+  only of authorized orchestrator executions;
+- any `fallback` orchestrator material-execution event;
+- `unclassified` orchestrator events (legacy files): treated as fallback until
+  classified;
 - first wave delegated but subsequent waves executed locally.
+
+### Permissions and sequencing
+- any `BLOCKED-PERMISSION` lot: the rule should have been requested in the
+  plan's `Authorizations and tools` step;
+- any `Exclusivity breach`: a write on a resource while another lot held it.
 
 ### Rework discipline
 - replacements spawned where a `sendmessage` rework was never tried;
@@ -120,10 +163,12 @@ outcome:
 4. first-pass success;
 5. retries, rework modes, and escalation matrix;
 6. verification summary;
-7. delegation continuity and orchestrator material events;
-8. routing anomalies and recommendations;
-9. the explicit statement that platform token/credit usage is not exposed by
-   the Agent tool.
+7. delegation continuity, authorized orchestrator executions by reason, and
+   fallback events;
+8. permission blocks, exclusive resources held, and any breach;
+9. routing anomalies and recommendations;
+10. the explicit statement that platform token/credit usage is not exposed by
+    the Agent tool.
 
 The audit supports tuning future routing; it never replaces the outcome and
 verification report.
