@@ -1,4 +1,4 @@
-# Routing and Escalation Reference (Claude Code)
+# Routing and Escalation Reference (Claude Code, v4)
 
 Read this reference when a routing decision is non-obvious, when a lot fails,
 or when telemetry suggests systematic under- or over-routing.
@@ -47,11 +47,33 @@ Input size alone is not a reason to upgrade.
 A stronger first pass is justified when downstream rework is expensive enough
 that an underpowered attempt has a higher expected total cost.
 
-Top-tier child turns (`opus`, `fable`) are capped by the cycle budget in
-`SKILL.md`. Plan initial routes so the cap is not consumed before rework needs
-it, unless the initial lot is itself critical.
+Top-tier child turns (`opus`, `fable`) are capped per cycle at
+`max(2, C + 1)`, `C` being the number of critical lots in the cycle. Each
+critical lot owns one top-tier first pass; the single extra turn is the shared
+reserve for rework or verification. Irreversible lots (publication, install on
+a host, real collections against external services) are routed to the
+strongest suitable tier on the first pass; that is the routing the 2026-09-13
+session validated.
 
 ## Escalation diagnosis
+
+### Permission block (not an escalation)
+A command, a tool, or the spawn itself was refused by the permission system or
+the auto-mode classifier.
+
+Action: record `--result BLOCKED --block-kind permission` (lot status
+`BLOCKED-PERMISSION`), request the rule from the user, reword the prompt
+without trigger words if the spawn was refused (`--rework-mode reword`), then
+resume the same agent by `SendMessage`. Never change the tier for a
+permission block. See `references/executor-contract.md`.
+
+### Contract breach (not an escalation)
+The executor returned without a deliverable: "waiting for CI", "will check
+after the merge". The model is capable; it ignored the contract.
+
+Action: `SendMessage` to the same agent with the contract lines and the
+bounded wait command. Second occurrence: fresh spawn, same tier, contract at
+the top of the prompt.
 
 ### Specification/input failure
 Examples: wrong requirement, stale file, missing dependency, invalid assumption.
@@ -89,7 +111,9 @@ evidence clearly warrants it. Do not spawn a replacement when a `SendMessage`
 follow-up would address the diagnosed cause.
 
 Record every escalation in telemetry with `--rework-mode` and
-`--escalation-reason`.
+`--escalation-reason`. `SendMessage` to the same agent is always the first
+rework step when the agent is still alive; it preserves its context and costs
+one turn.
 
 ## Session-local adaptation
 
@@ -107,5 +131,8 @@ not enough.
 
 The orchestrator stays capable enough to plan, route, integrate, and diagnose
 failures. It must not perform substantial executor work because its own model
-is stronger or because the cycle budget ran out. Treat orchestrator context as
+is stronger or because the cycle budget ran out. The only orchestrator
+executions that are not a fallback are the ones declared in the plan with an
+authorized reason (`single-browser`, `user-gate`, `non-delegable-tool`,
+`trivial-glue`); see `references/planning.md`. Treat orchestrator context as
 scarce too: read references only when needed and keep the ledger compact.

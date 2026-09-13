@@ -1,4 +1,4 @@
-# Verification Reference (Claude Code)
+# Verification Reference (Claude Code, v4)
 
 Read this reference when deterministic evidence is insufficient, when work is
 critical, or when deciding whether an independent verifier is worth a child
@@ -30,8 +30,9 @@ Examples:
 ## Orchestrator baseline verification
 
 The orchestrator verifies every lot itself first: inspect produced files,
-recalculate values, compare against sources, run relevant tests, open rendered
-outputs when layout matters. For each criterion, ask what observable evidence
+recalculate values, compare against sources, **replay the decisive test or
+probe itself** (the executor's output is a claim, the orchestrator's rerun is
+the evidence), open rendered outputs when layout matters. For each criterion, ask what observable evidence
 would prove it failed, then perform that check.
 
 Verification is orchestrator work, not material execution. It does not count as
@@ -98,6 +99,14 @@ Every required criterion is:
 - `FAIL` — evidence contradicts it;
 - `BLOCKED` — verification lacks a required input, authority, or external state.
 
+At lot level, a `BLOCKED` caused by a permission rule or the classifier is
+reported as `BLOCKED-PERMISSION` (`--block-kind permission`), so the final
+audit separates missing authorizations from missing dependencies.
+
+An executor response that ends on a pending wait ("CI is running", "waiting
+for the merge") carries no verdict: treat it as an undelivered lot, not as a
+`BLOCKED` criterion.
+
 A material lot is not complete while a required criterion is unverified.
 Adjudicate conflicts between orchestrator and verifier by checking primary
 evidence directly.
@@ -109,6 +118,15 @@ whose evidence depended on the failed implementation.
 
 A verification failure that changes architecture, assumptions, dependencies, or
 scope triggers re-planning before further downstream material work.
+
+## Verification and exclusivity windows
+
+Verification of a lot that holds an exclusive resource happens **before** the
+close event releases the hold. Do not merge, push, or deploy on that resource
+to "help" the verification: an approval or promotion PR is measured against a
+frozen base, and any write to the base while it is open invalidates it. The
+ledger's `Held resources` line is part of the verification checklist for every
+orchestrator write.
 
 ## Critical work
 
