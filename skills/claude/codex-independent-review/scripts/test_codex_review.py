@@ -726,5 +726,48 @@ def run_git(root: Path, *arguments: str) -> None:
     )
 
 
+
+class SandboxVisibleTemporaryDirectoryTests(unittest.TestCase):
+    def test_directory_lives_under_tempdir_and_is_removed_on_exit(self):
+        with review.sandbox_visible_temporary_directory("codex-review-test-") as name:
+            directory = Path(name)
+            self.assertTrue(directory.is_dir())
+            self.assertEqual(directory.parent, Path(tempfile.gettempdir()))
+            self.assertTrue(directory.name.startswith("codex-review-test-"))
+            (directory / "probe.txt").write_text("x", encoding="utf-8")
+        self.assertFalse(directory.exists())
+
+    def test_two_directories_never_collide(self):
+        with review.sandbox_visible_temporary_directory("codex-review-test-") as first:
+            with review.sandbox_visible_temporary_directory("codex-review-test-") as second:
+                self.assertNotEqual(first, second)
+
+    @unittest.skipUnless(os.name == "nt", "ACL Windows")
+    def test_windows_directory_inherits_the_parent_acl_unlike_mkdtemp(self):
+        # `tempfile.mkdtemp` (mode 0o700) ne laisse que SYSTEM, les
+        # administrateurs et les « droits du propriétaire » : le jeton restreint
+        # de Codex ne lit pas l'instantané et n'écrit pas le rapport. Les
+        # entrées héritées sont marquées « (I) » par icacls, quelle que soit la
+        # langue du système.
+        def acl(path: str) -> str:
+            return subprocess.run(
+                ["icacls", path], capture_output=True, text=True, encoding="cp850", errors="replace", check=False
+            ).stdout
+
+        with review.sandbox_visible_temporary_directory("codex-review-test-") as name:
+            self.assertIn("(I)", acl(name))
+        restricted = tempfile.mkdtemp(prefix="codex-review-test-mkdtemp-")
+        try:
+            self.assertNotIn("(I)", acl(restricted))
+        finally:
+            os.rmdir(restricted)
+
+
+class WindowsSandboxFlagTests(unittest.TestCase):
+    def test_the_unelevated_windows_sandbox_is_requested_only_on_windows(self):
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn('command[-1:-1] = ["-c", \'windows.sandbox="unelevated"\']', source)
+        self.assertIn('if os.name == "nt":', source)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
